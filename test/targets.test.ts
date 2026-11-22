@@ -1,4 +1,4 @@
-import { readFile, writeFile } from "node:fs/promises";
+import { readFile, readdir, writeFile } from "node:fs/promises";
 import { isAbsolute, join } from "node:path";
 import { expect, test } from "vitest";
 import { applyOps, previousHashes, pruneBackups, removeItems, toLockItems } from "../src/apply.js";
@@ -189,4 +189,15 @@ test("remove leaves no backups behind when we owned the whole file, and keeps us
     owned.roots,
   );
   expect(await pruneBackups((await removeItems(l2, [], owned.roots)).backups)).toEqual([]);
+});
+
+test("remove prunes directories that become empty, including after deleting merged files", async () => {
+  const { ctx, res, roots } = await setup("project");
+  const lock = toLockItems(
+    (await applyOps((await targets["claude-code"].plan(res, ctx)).ops)).applied,
+    "1",
+    roots,
+  );
+  await removeItems(lock, [], roots);
+  expect(await readdir(ctx.projectRoot)).toEqual([]);
 });

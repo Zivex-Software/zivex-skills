@@ -253,7 +253,10 @@ export async function removeItems(
         if (!saved.has(path)) await backup(path, r, at, opts.dryRun);
         saved.add(path);
         await put(path, next, opts.dryRun);
-      } else if (!opts.dryRun) await unlink(path);
+      } else if (!opts.dryRun) {
+        await unlink(path);
+        await pruneEmptyDirs(dirname(path), rootOf(roots, it.scope));
+      }
       rep.removed.push(key);
     }
   }
@@ -261,11 +264,16 @@ export async function removeItems(
 }
 
 /** A file that ended up deleted held only our content, so its backup is clutter. Returns the backups that remain. */
-export async function pruneBackups(backups: string[]): Promise<string[]> {
+export async function pruneBackups(backups: string[], roots?: Roots): Promise<string[]> {
   const keep: string[] = [];
   for (const b of new Set(backups)) {
     if (await readOrUndefined(b.replace(/\.zivex-bak-\d+$/, ""))) keep.push(b);
-    else await unlink(b).catch(() => undefined);
+    else {
+      await unlink(b).catch(() => undefined);
+      // The backup may have been the last thing keeping its directory alive.
+      const stop = roots && [roots.project, roots.home].find((r) => b.startsWith(r));
+      if (stop) await pruneEmptyDirs(dirname(b), stop);
+    }
   }
   return keep;
 }

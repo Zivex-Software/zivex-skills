@@ -1,6 +1,6 @@
 {
   "name": "zivex-skills",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "description": "Install AI-agent skills, rules, hooks and subagents for .NET modular-monolith development into Claude Code, Cursor and Codex.",
   "keywords": [
     "agent-skills",
@@ -37,7 +37,8 @@
     "lint": "oxlint",
     "format": "oxfmt",
     "format:check": "oxfmt --check",
-    "test": "vitest run"
+    "test": "vitest run",
+    "smoke": "npm run build && node scripts/smoke.mjs"
   },
   "dependencies": {
     "@clack/prompts": "^1.9.0",

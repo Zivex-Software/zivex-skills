@@ -1,0 +1,25 @@
+name: Publish
+# Trusted publishing (OIDC): no npm token is stored. One-time setup on npmjs.com:
+# package settings -> Trusted Publisher -> GitHub Actions, repo zivex-software/zivex-skills, workflow publish.yml.
+on:
+  push:
+    tags: ["v*"]
+permissions:
+  contents: read
+  id-token: write
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          registry-url: https://registry.npmjs.org
+      - run: npm ci
+      - run: npm run lint && npm run typecheck && npm run format:check && npm test
+      - name: Tag must match package.json
+        run: test "v$(node -p "require('./package.json').version")" = "${GITHUB_REF_NAME}"
+      - run: npm run build
+      - run: node scripts/smoke.mjs npm
+      - run: npm publish --provenance --access public

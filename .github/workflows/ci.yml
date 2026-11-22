@@ -19,3 +19,41 @@ jobs:
       - run: npm run format:check
       - run: npm test
       - run: npm run build
+
+  smoke:
+    needs: check
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+        pm: [npm, pnpm, yarn, bun]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: npm }
+      - if: matrix.pm == 'bun'
+        uses: oven-sh/setup-bun@v2
+      - if: matrix.pm == 'pnpm'
+        run: corepack enable pnpm
+      - if: matrix.pm == 'yarn'
+        run: |
+          corepack enable yarn
+          corepack prepare yarn@stable --activate
+      - run: npm ci
+      - run: npm run build
+      # Installs the packed tarball with the package manager and runs init/doctor/sync/remove on a fixture .NET repo.
+      - run: node scripts/smoke.mjs ${{ matrix.pm }}
+
+  skills-discovery:
+    needs: check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22 }
+      # The open-standard installer must find every skill in this repo.
+      - run: |
+          out=$(npx --yes skills@latest add . --list)
+          echo "$out"
+          test "$(echo "$out" | grep -cE '^.{0,4}    dotnet-')" -eq "$(ls content/skills | wc -l)"

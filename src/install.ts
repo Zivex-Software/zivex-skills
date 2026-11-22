@@ -151,7 +151,7 @@ async function dropItems(items: InstalledItem[], all: InstalledItem[], r: Roots,
     out.conflicts.push(...rep.conflicts);
     if (!rep.conflicts.length) out.items.push(it);
   }
-  if (!opts.dryRun) await pruneBackups(backups);
+  if (!opts.dryRun) await pruneBackups(backups, r);
   return out;
 }
 
