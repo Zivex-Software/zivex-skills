@@ -35,7 +35,8 @@ const tail = (s) => s.trim().split("\n").slice(-40).join("\n");
 
 const top = run("git", ["rev-parse", "--show-toplevel"]);
 if (!top.ok) process.exit(0);
-const root = top.out.trim();
+// git prints forward slashes on Windows; resolve() normalises them so path comparisons below work.
+const root = resolve(top.out.trim());
 const status = run("git", ["status", "--porcelain", "-uall"]);
 const changed = status.ok
   ? status.out
