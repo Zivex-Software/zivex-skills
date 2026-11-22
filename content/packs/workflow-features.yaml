@@ -1,0 +1,15 @@
+id: workflow-features
+title: Feature development
+hint: modules, slices, verification
+requires: [foundation, dotnet-core, dotnet-modules]
+skills:
+  [
+    dotnet-module-context,
+    dotnet-feature-slice,
+    dotnet-module-contract,
+    dotnet-testing,
+    dotnet-verify,
+  ]
+agents: [dotnet-reviewer]
+hooks: [format-on-edit, verify-before-stop]
+stacks: [dotnet]

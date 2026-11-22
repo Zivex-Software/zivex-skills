@@ -1,0 +1,3 @@
+event: PostToolUse
+matcher: Edit|Write
+timeout: 120

@@ -35,8 +35,11 @@ export function upsertSection(text: string, id: string, body: string): string {
 export function removeSection(text: string, id: string): string {
   const at = locate(text, id);
   if (!at) return text;
-  const out = text.slice(0, at[0]) + text.slice(at[1]).replace(/^\n/, "");
-  return out.replace(/\n{3,}/g, "\n\n").trim() ? out : "";
+  const out = (text.slice(0, at[0]) + text.slice(at[1]).replace(/^\n/, "")).replace(
+    /\n{3,}/g,
+    "\n\n",
+  );
+  return out.trim() ? `${out.trimEnd()}\n` : "";
 }
 
 // ---- Claude Code settings.json hooks ----

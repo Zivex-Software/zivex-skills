@@ -1,7 +1,7 @@
 import { readFile, writeFile } from "node:fs/promises";
 import { isAbsolute, join } from "node:path";
 import { expect, test } from "vitest";
-import { applyOps, previousHashes, removeItems, toLockItems } from "../src/apply.js";
+import { applyOps, previousHashes, pruneBackups, removeItems, toLockItems } from "../src/apply.js";
 import { targets } from "../src/targets/index.js";
 import type { AgentId } from "../src/schema.js";
 import { setup, tree, write } from "./helpers.js";
@@ -158,4 +158,35 @@ test("dry run writes nothing", async () => {
   const rep = await applyOps((await targets["claude-code"].plan(res, ctx)).ops, { dryRun: true });
   expect(rep.applied.every((a) => a.status === "written")).toBe(true);
   expect(await tree(ctx.projectRoot)).toEqual({});
+});
+
+test("merging many rules into one existing file makes exactly one backup; a new file makes none", async () => {
+  const { ctx, res } = await setup("project");
+  const fresh = await applyOps((await targets["claude-code"].plan(res, ctx)).ops);
+  expect(fresh.backups).toEqual([]);
+  const { ctx: c2, res: r2 } = await setup("project");
+  await write(c2.projectRoot, { "CLAUDE.md": "# Mine\n", ".claude/settings.json": "{}" });
+  const rep = await applyOps((await targets["claude-code"].plan(r2, c2)).ops);
+  expect(rep.backups).toHaveLength(2);
+});
+
+test("remove leaves no backups behind when we owned the whole file, and keeps user content in shared files", async () => {
+  const { ctx, res, roots } = await setup("project");
+  await write(ctx.projectRoot, { "CLAUDE.md": "# Mine\n" });
+  const lock = toLockItems(
+    (await applyOps((await targets["claude-code"].plan(res, ctx)).ops)).applied,
+    "1",
+    roots,
+  );
+  const rm = await removeItems(lock, [], roots);
+  expect(await readFile(join(ctx.projectRoot, "CLAUDE.md"), "utf8")).toBe("# Mine\n");
+  // CLAUDE.md survived (user content), so its backup stays; fully-owned files lose theirs.
+  expect((await pruneBackups(rm.backups)).every((b) => b.includes("CLAUDE.md"))).toBe(true);
+  const owned = await setup("project");
+  const l2 = toLockItems(
+    (await applyOps((await targets["claude-code"].plan(owned.res, owned.ctx)).ops)).applied,
+    "1",
+    owned.roots,
+  );
+  expect(await pruneBackups((await removeItems(l2, [], owned.roots)).backups)).toEqual([]);
 });

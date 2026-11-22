@@ -1,0 +1,4 @@
+id: foundation
+title: Foundation
+hint: always-on rules (data, structure, verification, safety)
+rules: [data-handling, structure, verification, change-safety, context-hygiene, security-baseline]

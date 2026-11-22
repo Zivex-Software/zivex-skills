@@ -1,0 +1,7 @@
+id: dotnet-core
+title: .NET core
+hint: conventions, verification, testing, destructive-command guard
+requires: [foundation]
+skills: [dotnet-conventions-bootstrap, dotnet-verify, dotnet-testing]
+hooks: [guard-destructive]
+stacks: [dotnet]

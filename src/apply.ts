@@ -1,4 +1,4 @@
-import { copyFile, mkdir, readFile, rmdir, unlink, writeFile } from "node:fs/promises";
+import { constants, copyFile, mkdir, readFile, rmdir, unlink, writeFile } from "node:fs/promises";
 import { dirname, relative, resolve } from "node:path";
 import {
   readSection,
@@ -42,7 +42,7 @@ export function opKey(op: Op): string {
   return op.path;
 }
 
-const stamp = () => new Date().toISOString().replace(/\D/g, "").slice(0, 14);
+export const stamp = () => new Date().toISOString().replace(/\D/g, "").slice(0, 14);
 const readOrUndefined = (p: string) =>
   readFile(p).then(
     (b) => b,
@@ -54,7 +54,12 @@ const readOrUndefined = (p: string) =>
 
 async function backup(path: string, report: Report, at: string, dryRun?: boolean) {
   const to = `${path}.zivex-bak-${at}`;
-  if (!dryRun) await copyFile(path, to);
+  // COPYFILE_EXCL: an existing backup with this name is the pristine one from earlier in this run; keep it.
+  if (!dryRun) {
+    await copyFile(path, to, constants.COPYFILE_EXCL).catch((e: NodeJS.ErrnoException) => {
+      if (e.code !== "EEXIST") throw e;
+    });
+  }
   report.backups.push(to);
 }
 
@@ -79,6 +84,12 @@ export async function applyOps(ops: Op[], opts: ApplyOptions = {}): Promise<Repo
   const report: Report = { applied: [], backups: [] };
   const at = stamp();
   const prev = opts.previous ?? new Map<string, string>();
+  // Back up a path only the first time this run touches it; later touches would just copy our own writes.
+  const touched = new Set<string>();
+  const backupOnce = async (path: string, existed: boolean) => {
+    if (existed && !touched.has(path)) await backup(path, report, at, opts.dryRun);
+    touched.add(path);
+  };
 
   for (const op of ops) {
     const key = opKey(op);
@@ -92,7 +103,7 @@ export async function applyOps(ops: Op[], opts: ApplyOptions = {}): Promise<Repo
       if (cur && sha256(cur) === hash) done("unchanged", hash);
       else if (cur && !opts.force && sha256(cur) !== old) done("conflict", hash);
       else {
-        if (cur) await backup(op.path, report, at, opts.dryRun);
+        await backupOnce(op.path, !!cur);
         await put(op.path, op.content, opts.dryRun);
         done("written", hash);
       }
@@ -105,7 +116,7 @@ export async function applyOps(ops: Op[], opts: ApplyOptions = {}): Promise<Repo
       if (cur !== undefined && sha256(cur) === hash) done("unchanged", hash);
       else if (cur !== undefined && !opts.force && sha256(cur) !== old) done("conflict", hash);
       else {
-        if (text !== undefined) await backup(op.path, report, at, opts.dryRun);
+        await backupOnce(op.path, text !== undefined);
         const base = text ?? op.preambleIfNew ?? "";
         await put(op.path, upsertSection(base, op.id, body), opts.dryRun);
         done("written", hash);
@@ -117,7 +128,7 @@ export async function applyOps(ops: Op[], opts: ApplyOptions = {}): Promise<Repo
       const after = upsertHook(before, op.entry);
       if (JSON.stringify(before) === JSON.stringify(after)) done("unchanged", hash);
       else {
-        if (text !== undefined) await backup(op.path, report, at, opts.dryRun);
+        await backupOnce(op.path, text !== undefined);
         await put(op.path, `${JSON.stringify(after, null, 2)}\n`, opts.dryRun);
         done("written", hash);
       }
@@ -192,10 +203,11 @@ export async function removeItems(
   items: InstalledItem[],
   keep: InstalledItem[],
   roots: Roots,
-  opts: { force?: boolean; dryRun?: boolean } = {},
+  opts: { force?: boolean; dryRun?: boolean; at?: string } = {},
 ): Promise<RemoveReport> {
   const rep: RemoveReport = { removed: [], conflicts: [], backups: [] };
-  const at = stamp();
+  const at = opts.at ?? stamp();
+  const saved = new Set<string>();
   const shared = new Set(
     keep.flatMap((k) => Object.keys(k.files).map((f) => toAbs(roots, k.scope, f))),
   );
@@ -238,11 +250,22 @@ export async function removeItems(
       }
       const r = { applied: [], backups: rep.backups };
       if (next) {
-        await backup(path, r, at, opts.dryRun);
+        if (!saved.has(path)) await backup(path, r, at, opts.dryRun);
+        saved.add(path);
         await put(path, next, opts.dryRun);
       } else if (!opts.dryRun) await unlink(path);
       rep.removed.push(key);
     }
   }
   return rep;
+}
+
+/** A file that ended up deleted held only our content, so its backup is clutter. Returns the backups that remain. */
+export async function pruneBackups(backups: string[]): Promise<string[]> {
+  const keep: string[] = [];
+  for (const b of new Set(backups)) {
+    if (await readOrUndefined(b.replace(/\.zivex-bak-\d+$/, ""))) keep.push(b);
+    else await unlink(b).catch(() => undefined);
+  }
+  return keep;
 }

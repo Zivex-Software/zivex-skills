@@ -1,6 +1,13 @@
 import { unlink } from "node:fs/promises";
 import { relative } from "node:path";
-import { applyOps, previousHashes, removeItems, toLockItems } from "./apply.js";
+import {
+  applyOps,
+  previousHashes,
+  pruneBackups,
+  removeItems,
+  stamp,
+  toLockItems,
+} from "./apply.js";
 import type { Applied, Roots } from "./apply.js";
 import { globalLockPath, projectLockPath, readLock, upsertItems, writeLock } from "./lockfile.js";
 import { resolveSelection } from "./resolve/index.js";
@@ -130,13 +137,21 @@ export async function runInstall(
 async function dropItems(items: InstalledItem[], all: InstalledItem[], r: Roots, opts: RunOpts) {
   const out = { removed: [] as string[], items: [] as InstalledItem[], conflicts: [] as string[] };
   let remaining = all;
+  const at = stamp();
+  const backups: string[] = [];
   for (const it of items) {
     remaining = remaining.filter((i) => i !== it);
-    const rep = await removeItems([it], remaining, r, { force: opts.force, dryRun: opts.dryRun });
+    const rep = await removeItems([it], remaining, r, {
+      force: opts.force,
+      dryRun: opts.dryRun,
+      at,
+    });
+    backups.push(...rep.backups);
     out.removed.push(...rep.removed);
     out.conflicts.push(...rep.conflicts);
     if (!rep.conflicts.length) out.items.push(it);
   }
+  if (!opts.dryRun) await pruneBackups(backups);
   return out;
 }
 

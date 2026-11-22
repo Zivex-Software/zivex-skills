@@ -1,0 +1,6 @@
+id: dotnet-modules
+title: .NET modules
+hint: module context, contracts, boundary checks
+requires: [dotnet-core]
+skills: [dotnet-module, dotnet-module-context, dotnet-module-contract, dotnet-module-boundary-check]
+stacks: [dotnet]
