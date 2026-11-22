@@ -1,0 +1,6 @@
+id: aspnet-data
+title: EF Core data access
+hint: queries, concurrency, migrations, multi-tenancy
+requires: [dotnet-core]
+skills: [aspnet-data-efcore]
+stacks: [dotnet]

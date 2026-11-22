@@ -18,7 +18,8 @@ description: Implements one use case as a vertical slice inside a .NET module - 
 3. **Implement the slice end to end**: validate at the boundary, authorize, run the handler, persist, return the repo's result shape. Keep types `internal` unless another module needs them (then expose via `.Contracts`, see `dotnet-module-contract`).
 4. **Persistence**: if the model changes, add a migration the way the repo does; never apply it to a shared database.
 5. **Tests** (see `dotnet-testing`): handler-level tests for rules and failures, one endpoint/integration test for the happy path.
-6. **Verify** with `dotnet-verify` before reporting done.
+6. **Apply the ASP.NET skills that are installed**: `aspnet-api-design` (contract, errors, pagination), `aspnet-security` (authorization, input), `aspnet-data-efcore` (queries, concurrency, migrations), `aspnet-performance` (async, caching), `aspnet-resilience`/`aspnet-observability` (outbound calls, background work, logging).
+7. **Verify** with `dotnet-verify` before reporting done.
 
 ## Rules
 

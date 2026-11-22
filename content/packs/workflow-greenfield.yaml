@@ -1,7 +1,7 @@
 id: workflow-greenfield
 title: Greenfield start
 hint: bootstrap conventions, create modules and first slices
-requires: [foundation, dotnet-core, dotnet-modules]
+requires: [foundation, dotnet-core, dotnet-modules, aspnet-security, aspnet-data, aspnet-api]
 skills: [dotnet-conventions-bootstrap, dotnet-module, dotnet-feature-slice]
 hooks: [format-on-edit]
 stacks: [dotnet]

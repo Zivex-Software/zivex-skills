@@ -1,7 +1,16 @@
 id: workflow-features
 title: Feature development
 hint: modules, slices, verification
-requires: [foundation, dotnet-core, dotnet-modules]
+requires:
+  [
+    foundation,
+    dotnet-core,
+    dotnet-modules,
+    aspnet-security,
+    aspnet-data,
+    aspnet-api,
+    aspnet-performance,
+  ]
 skills:
   [
     dotnet-module-context,

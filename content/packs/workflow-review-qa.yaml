@@ -1,7 +1,8 @@
 id: workflow-review-qa
 title: Review and QA
 hint: independent review, boundary checks, test gaps
-requires: [foundation, dotnet-core, dotnet-modules]
+requires:
+  [foundation, dotnet-core, dotnet-modules, aspnet-security, aspnet-performance, aspnet-data]
 skills: [dotnet-verify, dotnet-testing, dotnet-module-boundary-check]
 agents: [dotnet-reviewer]
 stacks: [dotnet]

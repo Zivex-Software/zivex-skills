@@ -1,4 +1,11 @@
 {
-  "categories": { "correctness": "error" },
-  "ignorePatterns": ["dist", "node_modules", "content/hooks/**/*.mjs.golden"]
+  "categories": {
+    "correctness": "error"
+  },
+  "ignorePatterns": [
+    "content/hooks/**/*.mjs.golden",
+    "dist",
+    "node_modules",
+    "scripts/gen/*.rules.js"
+  ]
 }

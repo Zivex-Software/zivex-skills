@@ -24,6 +24,7 @@ description: Checklist and procedure to verify .NET work before calling it done 
    - Contracts: public changes are intentional, versioned or backwards compatible, consumers updated.
    - Migrations: present when the model changed, reversible, reviewed, not applied to a shared database.
    - Security: input validated at the boundary, authorization and tenant/ownership checks on new endpoints and queries, no secrets or personal data in code or logs.
+   - Deep checks when the matching skill is installed: `aspnet-security` (its `check-security.mjs` scanner), `aspnet-data-efcore` (`check-efcore.mjs`: N+1, raw SQL, migrations), `aspnet-performance` (`check-performance.mjs`: blocking calls, allocations, caching), `aspnet-api-design` (error contract, ProblemDetails), `aspnet-resilience` and `aspnet-observability` (timeouts, retries, logging, health). Run the scanners on the changed module and confirm each hit; they are heuristics.
 6. **Report** exactly what you ran (commands and results), what you did not run and why, and any open risk.
 
 If anything fails, fix it and re-run the failed step; do not report success on a partial run.

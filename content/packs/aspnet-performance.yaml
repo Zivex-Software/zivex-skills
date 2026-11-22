@@ -1,0 +1,6 @@
+id: aspnet-performance
+title: ASP.NET performance
+hint: async, caching, allocations, measuring
+requires: [dotnet-core]
+skills: [aspnet-performance]
+stacks: [dotnet]

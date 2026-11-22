@@ -1,0 +1,22 @@
+// Lines (1-based) inside a loop body, found by brace tracking. Good enough for "query in loop" candidates.
+function linesInLoops(text) {
+  const out = [];
+  const stack = [];
+  let pendingLoop = false;
+  text.split("\n").forEach((raw, i) => {
+    const line = raw.replace(/\/\/.*$/, "").replace(/"(?:[^"\\]|\\.)*"/g, '""');
+    if (/^\s*(foreach|for|while)\b/.test(line)) pendingLoop = true;
+    const inLoopAtStart = stack.some(Boolean);
+    for (const ch of line) {
+      if (ch === "{") {
+        stack.push(pendingLoop);
+        pendingLoop = false;
+      } else if (ch === "}") stack.pop();
+    }
+    if (pendingLoop && /;\s*$/.test(line) && !/^\s*(foreach|for|while)\b/.test(line)) pendingLoop = false;
+    if (inLoopAtStart) out.push(i + 1);
+  });
+  return out;
+}
+const anyFile = (files, re) => files.some((f) => f.cs && re.test(f.text));
+const firstFile = (files, re) => files.find((f) => f.cs && re.test(f.text));

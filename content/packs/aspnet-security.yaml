@@ -1,0 +1,6 @@
+id: aspnet-security
+title: ASP.NET security
+hint: secure coding, hardening, security audits (OWASP)
+requires: [dotnet-core]
+skills: [aspnet-security, aspnet-security-audit]
+stacks: [dotnet]

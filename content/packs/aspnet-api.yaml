@@ -1,0 +1,6 @@
+id: aspnet-api
+title: API, resilience and observability
+hint: endpoints, ProblemDetails, retries, OpenTelemetry, health checks
+requires: [dotnet-core]
+skills: [aspnet-api-design, aspnet-resilience, aspnet-observability]
+stacks: [dotnet]

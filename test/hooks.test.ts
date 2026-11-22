@@ -49,10 +49,14 @@ test("verify-before-stop and format-on-edit no-op outside .NET / without changes
 test("every pack resolves and the shipped packs cover the Phase 1 content", async () => {
   const c = await loadContent();
   for (const id of c.packs.keys()) resolvePacks(c, [id]);
-  expect([...c.skills.keys()].sort()).toHaveLength(8);
+  expect([...c.skills.keys()].sort()).toHaveLength(15);
   expect(c.rules.size).toBe(6);
   expect(c.hooks.size).toBe(3);
   expect([...c.packs.keys()].sort()).toEqual([
+    "aspnet-api",
+    "aspnet-data",
+    "aspnet-performance",
+    "aspnet-security",
     "dotnet-core",
     "dotnet-modules",
     "foundation",
