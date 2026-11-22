@@ -90,7 +90,9 @@ try {
   }
   const hooks = JSON.parse(readFileSync(join(repo, ".claude/settings.json"), "utf8")).hooks;
   assert.deepEqual(Object.keys(hooks).sort(), ["PostToolUse", "PreToolUse", "Stop"]);
-  assert.match(zs("doctor"), /No problems found/);
+  // Warnings are fine (installing for Claude Code and Cursor triggers the duplicate-skill warning); errors are not.
+  const doctor = zs("doctor");
+  assert.match(doctor, /No problems found|0 error\(s\)/, doctor);
   assert.match(zs("sync"), /Nothing to do/);
   zs("remove", "--all", "--project");
   assert.deepEqual(
