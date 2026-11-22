@@ -26,7 +26,11 @@ const tgz = join(work, packed[0].filename);
 const runners = {
   npm: (a) => ["npm", ["exec", "--yes", `--package=${tgz}`, "--", "zivex-skills", ...a]],
   pnpm: (a) => ["pnpm", ["--package", tgz, "dlx", "zivex-skills", ...a]],
-  yarn: (a) => ["yarn", ["dlx", "-p", tgz, "zivex-skills", ...a]],
+  // Yarn Berry reads a bare Windows path as a registry name, so give it an explicit file: URL.
+  yarn: (a) => [
+    "yarn",
+    ["dlx", "-p", `zivex-skills@file:${tgz.replaceAll("\\", "/")}`, "zivex-skills", ...a],
+  ],
   bun: (a) => ["bunx", ["--package", tgz, "zivex-skills", ...a]],
 };
 const repo = join(work, "repo");

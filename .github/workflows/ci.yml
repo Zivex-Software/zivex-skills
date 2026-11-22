@@ -54,6 +54,7 @@ jobs:
         with: { node-version: 22 }
       # The open-standard installer must find every skill in this repo.
       - run: |
-          out=$(npx --yes skills@latest add . --list)
+          out=$(npx --yes skills@latest add . --list | sed -E 's/\x1b\[[0-9;?]*[a-zA-Z]//g')
           echo "$out"
-          test "$(echo "$out" | grep -cE '^.{0,4}    dotnet-')" -eq "$(ls content/skills | wc -l)"
+          found=$(echo "$out" | grep -oE 'Found [0-9]+ skills' | grep -oE '[0-9]+')
+          test "$found" -eq "$(ls content/skills | wc -l)"
