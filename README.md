@@ -72,7 +72,9 @@ Flags: `-g/--global`, `--project`, `--scope <hybrid|project|global>`. A project 
 | Codex             | section in `AGENTS.md` | `.agents/skills`                               | `.codex/agents/*.toml` | not installed                                   |
 | Other (`generic`) | not installed          | `.agents/skills`                               | not installed          | not installed                                   |
 
-Cursor has no global rules file, so its rules always go to the project. `.claude/settings.local.json` is never touched.
+Hooks are installed for Claude Code only. Cursor runs the hooks from `.claude/settings.json` itself (Third-Party Imports, on by default), so select Claude Code as well to get them in Cursor. Codex hooks are intentionally not installed: Codex requires each user to review project hooks, cannot ask for confirmation, and reports file edits as patches without file paths.
+
+Cursor has no global rules file, so in hybrid scope the wizard asks whether its rules may go into the repository (non-interactive runs write them to the project). `.claude/settings.local.json` is never touched.
 
 ## Commands
 

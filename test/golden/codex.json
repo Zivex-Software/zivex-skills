@@ -6,6 +6,6 @@
     "AGENTS.md": "<!-- zivex-skills:begin safety -->\n# Safety first\n\nNever drop prod.\n<!-- zivex-skills:end safety -->\n"
   },
   "notices": [
-    "Codex: hooks were not installed (hooks.json needs per-user trust and its format is unverified)."
+    "Codex: hooks were not installed (Codex requires each user to review project hooks, and it cannot ask for confirmation or report edited file paths). Skills, rules and subagents were installed."
   ]
 }

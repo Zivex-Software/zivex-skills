@@ -12,5 +12,6 @@ First release (Phase 1).
 - Wizard asks whether Cursor rules go into the repository when the scope is hybrid (Cursor has no global rules file); the answer is stored in `zivex.json` (`noRules`).
 - `doctor` warns when a skill is installed for both Claude Code and Cursor (Cursor reads `.claude/skills` and `.agents/skills`).
 - Cursor: no separate hooks are installed because Cursor runs the hooks in `.claude/settings.json` (Third-Party Imports, on by default); the install notice says so.
+- Codex hooks are intentionally not installed (documented in the README and the install notice).
 - Tooling: TypeScript 7.0.2.
 - Safety: backups before merging into user files, content hashes to detect local edits, idempotent installs, complete removal.

@@ -9,7 +9,10 @@ import type { Op, Target } from "./types.js";
 //   (AGENTS.override.md, if present, takes precedence over AGENTS.md at the same level)
 // - /docs/build-skills   : skills in .agents/skills (project) and ~/.agents/skills (user)
 // - /docs/agent-configuration/subagents : TOML files in .codex/agents or ~/.codex/agents
-// - hooks.json requires per-user trust review and its format was not verified, so hooks are not installed.
+// - hooks are deliberately NOT installed (decision, Nov 2026). Per learn.chatgpt.com/docs/hooks: project hooks only run after
+//   the user reviews them with /hooks; `command` is a shell string run from the session cwd (no args array, no documented
+//   project-root variable); file edits arrive as `apply_patch` (no file_path) so format-on-edit cannot work; and
+//   PreToolUse "ask" is unsupported, so guard-destructive cannot ask. Revisit if those change.
 
 /** JSON string escapes are a subset of TOML basic-string escapes. */
 const toml = (v: string) => JSON.stringify(v);
@@ -63,7 +66,7 @@ export const codex: Target = {
 
     if (res.hooks.length)
       notices.push(
-        "Codex: hooks were not installed (hooks.json needs per-user trust and its format is unverified).",
+        "Codex: hooks were not installed (Codex requires each user to review project hooks, and it cannot ask for confirmation or report edited file paths). Skills, rules and subagents were installed.",
       );
     return { ops, notices };
   },
