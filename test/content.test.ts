@@ -7,6 +7,7 @@ const base = {
   "skills/a-skill/SKILL.md": skillMd("a-skill"),
   "foundation/safety.md": "# Safety\n",
   "hooks/fmt.mjs": "// hook\n",
+  "hooks/fmt.yaml": "event: PostToolUse\n",
   "agents/rev.md": "---\nname: rev\ndescription: Reviews.\n---\nBody\n",
   "packs/foundation.yaml": "id: foundation\ntitle: Foundation\nrules: [safety]\n",
   "packs/core.yaml":

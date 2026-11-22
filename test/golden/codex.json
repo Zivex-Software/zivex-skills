@@ -1,0 +1,11 @@
+{
+  "files": {
+    ".agents/skills/a-skill/references/notes.md": "notes\n",
+    ".agents/skills/a-skill/SKILL.md": "---\nname: a-skill\ndescription: Does a-skill.\n---\n# a-skill\n",
+    ".codex/agents/rev.toml": "name = \"rev\"\ndescription = \"Reviews a diff.\"\ndeveloper_instructions = \"Review the diff.\\nSay \\\"ok\\\".\"\n",
+    "AGENTS.md": "<!-- zivex-skills:begin safety -->\n# Safety first\n\nNever drop prod.\n<!-- zivex-skills:end safety -->\n"
+  },
+  "notices": [
+    "Codex: hooks were not installed (hooks.json needs per-user trust and its format is unverified)."
+  ]
+}

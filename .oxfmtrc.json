@@ -1,0 +1,1 @@
+{ "ignorePatterns": ["test/golden/**", "dist/**", "package-lock.json"] }

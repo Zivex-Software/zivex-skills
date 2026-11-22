@@ -2,8 +2,13 @@ import { readdir, readFile, stat } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import { join } from "node:path";
 import { parse as parseYaml } from "yaml";
-import { agentFrontmatterSchema, packSchema, skillFrontmatterSchema } from "./schema.js";
-import type { Pack, SkillFrontmatter } from "./schema.js";
+import {
+  agentFrontmatterSchema,
+  hookMetaSchema,
+  packSchema,
+  skillFrontmatterSchema,
+} from "./schema.js";
+import type { HookMeta, Pack, SkillFrontmatter } from "./schema.js";
 
 export interface Entry {
   name: string;
@@ -13,13 +18,16 @@ export interface Entry {
 export interface Skill extends Entry {
   frontmatter: SkillFrontmatter;
 }
+export interface Hook extends Entry {
+  meta: HookMeta;
+}
 export interface Content {
   root: string;
   packs: Map<string, Pack>;
   rules: Map<string, Entry>;
   skills: Map<string, Skill>;
   agents: Map<string, Entry>;
-  hooks: Map<string, Entry>;
+  hooks: Map<string, Hook>;
 }
 
 export class ContentError extends Error {
@@ -38,7 +46,7 @@ const exists = (p: string) =>
   );
 const list = (dir: string) => readdir(dir, { withFileTypes: true }).catch(() => []);
 
-function frontmatter(text: string): { data: unknown; body: string } | undefined {
+export function frontmatter(text: string): { data: unknown; body: string } | undefined {
   const m = /^---\r?\n([\s\S]*?)\r?\n---\r?\n?([\s\S]*)$/.exec(text);
   if (!m) return undefined;
   return { data: parseYaml(m[1] ?? ""), body: m[2] ?? "" };
@@ -110,17 +118,28 @@ export async function loadContent(root = defaultContentRoot()): Promise<Content>
     else c.agents.set(name, { name, path });
   }
 
-  for (const [dir, ext, map] of [
-    ["foundation", ".md", c.rules],
-    ["hooks", ".mjs", c.hooks],
-  ] as const) {
-    for (const f of await list(join(root, dir))) {
-      if (f.isFile() && f.name.endsWith(ext)) {
-        map.set(f.name.slice(0, -ext.length), {
-          name: f.name.slice(0, -ext.length),
-          path: join(root, dir, f.name),
-        });
-      }
+  for (const f of await list(join(root, "foundation"))) {
+    if (f.isFile() && f.name.endsWith(".md")) {
+      const name = f.name.slice(0, -3);
+      c.rules.set(name, { name, path: join(root, "foundation", f.name) });
+    }
+  }
+
+  const hookFiles = (await list(join(root, "hooks"))).filter((f) => f.isFile());
+  const hookNames = new Set(hookFiles.map((f) => f.name.replace(/\.(mjs|yaml)$/, "")));
+  for (const name of hookNames) {
+    const script = join(root, "hooks", `${name}.mjs`);
+    const meta = join(root, "hooks", `${name}.yaml`);
+    if (!(await exists(script)) || !(await exists(meta))) {
+      issues.push(`hooks/${name}: needs both ${name}.mjs and ${name}.yaml`);
+      continue;
+    }
+    try {
+      const r = hookMetaSchema.safeParse(parseYaml(await readFile(meta, "utf8")));
+      if (!r.success) issues.push(`${rel(meta)}: ${fmt(r.error)}`);
+      else c.hooks.set(name, { name, path: script, meta: r.data });
+    } catch (e) {
+      issues.push(`${rel(meta)}: ${(e as Error).message}`);
     }
   }
 

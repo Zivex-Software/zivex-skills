@@ -44,6 +44,24 @@ export const agentFrontmatterSchema = z.looseObject({
   description: z.string().min(1),
 });
 
+/**
+ * Sidecar for content/hooks/<name>.mjs: content/hooks/<name>.yaml.
+ * Events/matchers per https://code.claude.com/docs/en/hooks
+ */
+export const hookMetaSchema = z.strictObject({
+  event: z.enum([
+    "PreToolUse",
+    "PostToolUse",
+    "Stop",
+    "SubagentStop",
+    "SessionStart",
+    "UserPromptSubmit",
+  ]),
+  matcher: z.string().min(1).optional(),
+  timeout: z.number().int().positive().optional(),
+});
+export type HookMeta = z.infer<typeof hookMetaSchema>;
+
 export const itemKindSchema = z.enum(["rule", "skill", "agent", "hook"]);
 export type ItemKind = z.infer<typeof itemKindSchema>;
 

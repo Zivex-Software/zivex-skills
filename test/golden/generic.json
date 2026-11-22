@@ -1,0 +1,7 @@
+{
+  "files": {
+    ".agents/skills/a-skill/references/notes.md": "notes\n",
+    ".agents/skills/a-skill/SKILL.md": "---\nname: a-skill\ndescription: Does a-skill.\n---\n# a-skill\n"
+  },
+  "notices": []
+}

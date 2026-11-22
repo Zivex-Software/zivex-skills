@@ -1,4 +1,4 @@
-import type { Content, Entry, Skill } from "../content.js";
+import type { Content, Entry, Hook, Skill } from "../content.js";
 
 export interface Resolved {
   /** Packs in dependency order (requirements first). */
@@ -6,7 +6,7 @@ export interface Resolved {
   rules: Entry[];
   skills: Skill[];
   agents: Entry[];
-  hooks: Entry[];
+  hooks: Hook[];
 }
 
 /** Expand pack ids with their `requires` closure, dedupe items, reject unknown ids and cycles. */

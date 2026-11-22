@@ -1,7 +1,7 @@
 import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { lockSchema } from "./schema.js";
-import type { Lock } from "./schema.js";
+import type { InstalledItem, Lock } from "./schema.js";
 import { globalConfigDir } from "./scopes.js";
 
 export const emptyLock = (): Lock => ({ version: 1, packs: [], agents: [], items: [] });
@@ -40,4 +40,11 @@ export async function writeLock(path: string, lock: Lock): Promise<void> {
   const tmp = `${path}.tmp`;
   await writeFile(tmp, `${JSON.stringify(sorted, null, 2)}\n`);
   await rename(tmp, path);
+}
+
+/** Replace items with the same kind/name/agent/scope, add the rest. */
+export function upsertItems(lock: Lock, items: InstalledItem[]): Lock {
+  const id = (i: InstalledItem) => `${i.kind}:${i.name}:${i.agent}:${i.scope}`;
+  const fresh = new Set(items.map(id));
+  return { ...lock, items: [...lock.items.filter((i) => !fresh.has(id(i))), ...items] };
 }

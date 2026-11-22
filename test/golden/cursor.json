@@ -1,0 +1,11 @@
+{
+  "files": {
+    ".agents/skills/a-skill/references/notes.md": "notes\n",
+    ".agents/skills/a-skill/SKILL.md": "---\nname: a-skill\ndescription: Does a-skill.\n---\n# a-skill\n",
+    ".cursor/rules/zivex-safety.mdc": "---\ndescription: \"Safety first\"\nalwaysApply: true\n---\n\n# Safety first\n\nNever drop prod.\n"
+  },
+  "notices": [
+    "Cursor: subagents were not installed (no documented file location).",
+    "Cursor: hooks were not installed (no documented file location)."
+  ]
+}

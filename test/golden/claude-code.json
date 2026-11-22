@@ -1,0 +1,11 @@
+{
+  "files": {
+    ".claude/agents/rev.md": "---\nname: rev\ndescription: \"Reviews a diff.\"\n---\nReview the diff.\nSay \"ok\".\n",
+    ".claude/hooks/zivex/fmt.mjs": "// fmt hook\n",
+    ".claude/settings.json": "{\n  \"hooks\": {\n    \"PostToolUse\": [\n      {\n        \"matcher\": \"Edit|Write\",\n        \"hooks\": [\n          {\n            \"type\": \"command\",\n            \"command\": \"node\",\n            \"args\": [\n              \"${CLAUDE_PROJECT_DIR}/.claude/hooks/zivex/fmt.mjs\"\n            ],\n            \"timeout\": 60\n          }\n        ]\n      }\n    ]\n  }\n}\n",
+    ".claude/skills/a-skill/references/notes.md": "notes\n",
+    ".claude/skills/a-skill/SKILL.md": "---\nname: a-skill\ndescription: Does a-skill.\n---\n# a-skill\n",
+    "CLAUDE.md": "<!-- zivex-skills:begin safety -->\n# Safety first\n\nNever drop prod.\n<!-- zivex-skills:end safety -->\n"
+  },
+  "notices": []
+}
