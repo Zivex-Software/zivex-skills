@@ -1,0 +1,24 @@
+name: Bug report
+description: Something does not install, update, or behave as documented
+labels: [bug]
+body:
+  - type: textarea
+    id: what
+    attributes: { label: What happened, description: What you ran and what you expected instead }
+    validations: { required: true }
+  - type: input
+    id: version
+    attributes: { label: zivex-skills version, placeholder: "npx zivex-skills --version" }
+    validations: { required: true }
+  - type: dropdown
+    id: agent
+    attributes:
+      label: Agent target
+      multiple: true
+      options: [Claude Code, Cursor, Codex, generic (.agents/skills), Claude Code plugin]
+  - type: input
+    id: env
+    attributes: { label: OS, Node and package manager, placeholder: "macOS 15, Node 22.x, pnpm 9" }
+  - type: textarea
+    id: out
+    attributes: { label: Output of `zivex-skills doctor` and the failing command, render: text }
