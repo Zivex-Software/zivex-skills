@@ -13,5 +13,7 @@ First release (Phase 1).
 - `doctor` warns when a skill is installed for both Claude Code and Cursor (Cursor reads `.claude/skills` and `.agents/skills`).
 - Cursor: no separate hooks are installed because Cursor runs the hooks in `.claude/settings.json` (Third-Party Imports, on by default); the install notice says so.
 - Codex hooks are intentionally not installed (documented in the README and the install notice).
+- Fix: `format-on-edit` now actually formats (`dotnet format` silently ignores an absolute `--include`; the hook runs from the project folder with a relative path). Found by running the hooks against a real .NET SDK; covered by an integration test that runs on every OS in CI.
+- Fix: `verify-before-stop` no longer silently does nothing on Windows (git prints forward slashes).
 - Tooling: TypeScript 7.0.2.
 - Safety: backups before merging into user files, content hashes to detect local edits, idempotent installs, complete removal.

@@ -2,7 +2,7 @@
 // No-ops outside .NET repositories so it is safe as a global hook.
 import { execFileSync } from "node:child_process";
 import { existsSync, readdirSync, readFileSync } from "node:fs";
-import { dirname, join, parse } from "node:path";
+import { basename, dirname, join, parse, relative } from "node:path";
 
 const isProject = (n) => /\.(sln|slnx|csproj)$/i.test(n);
 function findUp(start, test) {
@@ -19,10 +19,17 @@ try {
   if (typeof file !== "string" || !file.endsWith(".cs") || !existsSync(file)) process.exit(0);
   const workspace = findUp(dirname(file), isProject);
   if (!workspace) process.exit(0);
-  execFileSync("dotnet", ["format", workspace, "--include", file, "--no-restore"], {
-    stdio: "ignore",
-    timeout: 100_000,
-  });
+  // `dotnet format` silently ignores an absolute --include: run it from the workspace folder with a relative path.
+  const dir = dirname(workspace);
+  execFileSync(
+    "dotnet",
+    ["format", basename(workspace), "--include", relative(dir, file), "--no-restore"],
+    {
+      cwd: dir,
+      stdio: "ignore",
+      timeout: 100_000,
+    },
+  );
 } catch {
   // Formatting is best effort: a missing SDK or a format error must not interrupt the agent.
 }
