@@ -4,7 +4,14 @@ import { lockSchema } from "./schema.js";
 import type { InstalledItem, Lock } from "./schema.js";
 import { globalConfigDir } from "./scopes.js";
 
-export const emptyLock = (): Lock => ({ version: 1, packs: [], agents: [], items: [] });
+export const emptyLock = (): Lock => ({
+  version: 1,
+  packs: [],
+  skills: [],
+  hooks: true,
+  agents: [],
+  items: [],
+});
 
 export const projectLockPath = (projectRoot: string) => join(projectRoot, "zivex.json");
 export const globalLockPath = () => join(globalConfigDir(), "zivex.json");
@@ -31,6 +38,7 @@ export async function writeLock(path: string, lock: Lock): Promise<void> {
   const sorted: Lock = {
     ...lock,
     packs: [...lock.packs].sort(),
+    skills: [...lock.skills].sort(),
     agents: [...lock.agents].sort(),
     items: [...lock.items].sort((a, b) =>
       `${a.kind}:${a.name}:${a.agent}`.localeCompare(`${b.kind}:${b.name}:${b.agent}`),

@@ -133,7 +133,7 @@ const toRel = (roots: Roots, scope: "project" | "global", abs: string) => {
   const [path, tag] = abs.split("#");
   return relative(rootOf(roots, scope), path!).split("\\").join("/") + (tag ? `#${tag}` : "");
 };
-const toAbs = (roots: Roots, scope: "project" | "global", rel: string) => {
+export const toAbs = (roots: Roots, scope: "project" | "global", rel: string) => {
   const [path, tag] = rel.split("#");
   return resolve(rootOf(roots, scope), path!) + (tag ? `#${tag}` : "");
 };

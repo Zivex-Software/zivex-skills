@@ -79,7 +79,11 @@ export type InstalledItem = z.infer<typeof installedItemSchema>;
 /** zivex.json (project) and the global config share this shape. */
 export const lockSchema = z.strictObject({
   version: z.literal(1),
+  /** The selection that produced the items; `sync` and `update` replay it. */
+  scope: scopeSchema.optional(),
   packs: z.array(slug).default([]),
+  skills: z.array(slug).default([]),
+  hooks: z.boolean().default(true),
   agents: z.array(agentIdSchema).default([]),
   items: z.array(installedItemSchema).default([]),
 });

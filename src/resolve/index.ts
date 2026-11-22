@@ -41,3 +41,21 @@ export function resolvePacks(content: Content, ids: string[]): Resolved {
     hooks: pick("hooks", content.hooks),
   };
 }
+
+/** Packs plus individually added skills (deduped). Unknown skill names are rejected. */
+export function resolveSelection(
+  content: Content,
+  sel: { packs: string[]; skills: string[]; hooks?: boolean },
+): Resolved {
+  const res = resolvePacks(content, sel.packs);
+  for (const name of sel.skills) {
+    const skill = content.skills.get(name);
+    if (!skill)
+      throw new Error(
+        `Unknown skill "${name}". Run "zivex-skills list --available" to see what exists.`,
+      );
+    if (!res.skills.includes(skill)) res.skills.push(skill);
+  }
+  if (sel.hooks === false) res.hooks = [];
+  return res;
+}

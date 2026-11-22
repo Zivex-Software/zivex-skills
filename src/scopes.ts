@@ -1,5 +1,6 @@
 import { homedir } from "node:os";
 import { join } from "node:path";
+import { scopeSchema } from "./schema.js";
 import type { ItemKind, Scope } from "./schema.js";
 
 export interface ScopeFlags {
@@ -10,6 +11,9 @@ export interface ScopeFlags {
 
 /** Flags win; otherwise hybrid inside a git repo and global outside. */
 export function resolveScope(flags: ScopeFlags, inGitRepo: boolean): Scope {
+  if (flags.scope && !scopeSchema.safeParse(flags.scope).success) {
+    throw new Error(`Invalid scope "${flags.scope}". Use hybrid, project or global.`);
+  }
   const chosen = [flags.global && "global", flags.project && "project", flags.scope].filter(
     Boolean,
   );

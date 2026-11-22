@@ -10,6 +10,7 @@ test("default scope depends on git repo; flags win; conflicts throw", () => {
   expect(resolveScope({ project: true }, false)).toBe("project");
   expect(resolveScope({ global: true, scope: "global" }, true)).toBe("global");
   expect(() => resolveScope({ global: true, project: true }, true)).toThrow(/Conflicting/);
+  expect(() => resolveScope({ scope: "nope" as never }, true)).toThrow(/Invalid scope/);
 });
 
 test("hybrid puts only rules in the user directory", () => {
