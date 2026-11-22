@@ -15,5 +15,6 @@ First release (Phase 1).
 - Codex hooks are intentionally not installed (documented in the README and the install notice).
 - Fix: `format-on-edit` now actually formats (`dotnet format` silently ignores an absolute `--include`; the hook runs from the project folder with a relative path). Found by running the hooks against a real .NET SDK; covered by an integration test that runs on every OS in CI.
 - Fix: `verify-before-stop` no longer silently does nothing on Windows (git prints forward slashes).
+- Claude Code plugin and marketplace (`.claude-plugin/`, `plugin/`): one plugin with all skills, the reviewer subagent, the hooks and the foundation rules as SessionStart context; generated from `content/` (`npm run gen`), version kept in sync with the package, validated with `claude plugin validate`.
 - Tooling: TypeScript 7.0.2.
 - Safety: backups before merging into user files, content hashes to detect local edits, idempotent installs, complete removal.

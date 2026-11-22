@@ -39,7 +39,7 @@
     "format:check": "oxfmt --check",
     "test": "vitest run",
     "smoke": "npm run build && node scripts/smoke.mjs",
-    "gen": "node scripts/gen/build.mjs && oxfmt"
+    "gen": "node scripts/gen/build.mjs && node scripts/gen/plugin.mjs && oxfmt"
   },
   "dependencies": {
     "@clack/prompts": "^1.9.0",

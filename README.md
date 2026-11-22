@@ -53,6 +53,15 @@ bunx zivex-skills init
 
 After installing, ask your agent to run `dotnet-conventions-bootstrap`. Teammates run `npx zivex-skills sync` to match `zivex.json`.
 
+## Install as a Claude Code plugin (no npm needed)
+
+```text
+/plugin marketplace add Zivex-Software/zivex-skills
+/plugin install zivex-skills --marketplace Zivex-Software/zivex-skills
+```
+
+The plugin bundles all 15 skills, the `dotnet-reviewer` subagent, the three hooks (they do nothing outside .NET repositories) and the always-on foundation rules (injected at session start, because plugins cannot ship a `CLAUDE.md`). Skills appear as `zivex-skills:<skill>`. Use **either** the plugin **or** `npx zivex-skills init` for Claude Code, not both: both install the same hooks and rules. The CLI is the choice when you want per-pack selection, Cursor/Codex targets, project-committed files and `sync` for teammates.
+
 ## Scopes
 
 | Scope     | Where                                                                | Default           |

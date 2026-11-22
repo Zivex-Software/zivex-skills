@@ -1,0 +1,19 @@
+{
+  "name": "zivex-skills",
+  "version": "0.1.0",
+  "description": "Skills, hooks and a reviewer subagent for .NET / ASP.NET Core modular monoliths: security, performance, EF Core, API design, resilience, observability, module boundaries.",
+  "author": {
+    "name": "Zivex Software",
+    "url": "https://github.com/Zivex-Software"
+  },
+  "homepage": "https://github.com/Zivex-Software/zivex-skills#readme",
+  "repository": "https://github.com/Zivex-Software/zivex-skills",
+  "license": "MIT",
+  "keywords": ["dotnet", "aspnet-core", "csharp", "security", "efcore", "modular-monolith"],
+  "skills": ["./content/skills"],
+  "agents": ["./content/agents/dotnet-reviewer.md"],
+  "hooks": "./plugin/hooks.json",
+  "network": {
+    "hosts": ["api.nuget.org"]
+  }
+}

@@ -14,11 +14,11 @@ jobs:
       - uses: actions/setup-node@v4
         with: { node-version: 22, cache: npm }
       - run: npm ci
-      # The skills' check scripts are generated from scripts/gen; fail if the committed copies are stale.
+      # Generated files (skill check scripts, plugin hooks.json, plugin version) must be current.
       - if: runner.os == 'Linux'
         run: |
           npm run gen
-          git diff --exit-code -- content/skills
+          git diff --exit-code -- content/skills plugin .claude-plugin
       - run: npm run lint
       - run: npm run typecheck
       - run: npm run format:check
