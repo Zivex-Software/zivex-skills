@@ -126,3 +126,27 @@ test("init --packs with an unknown pack lists what exists", async () => {
     /Unknown pack "nope"/,
   );
 });
+
+test("hybrid with noRules=['cursor']: no Cursor rules are written, and the choice is stored for sync", async () => {
+  const { env, sel } = await envFor("hybrid");
+  await runInstall(env, { ...sel, agents: ["cursor"], noRules: ["cursor"] });
+  const files = Object.keys(await tree(env.projectRoot));
+  expect(files.some((f) => f.startsWith(".cursor/rules/"))).toBe(false);
+  expect(files).toContain(".agents/skills/a-skill/SKILL.md");
+  const lock = await readLock(projectLockPath(env.projectRoot));
+  expect(lock.noRules).toEqual(["cursor"]);
+
+  // Default (non-interactive) behaviour stays: rules go to the project with a notice.
+  const other = await envFor("hybrid");
+  const r = await runInstall(other.env, { ...other.sel, agents: ["cursor"] });
+  expect(Object.keys(await tree(other.env.projectRoot))).toContain(
+    ".cursor/rules/zivex-safety.mdc",
+  );
+  expect(r.notices.join()).toMatch(/no global rules/);
+});
+
+test("Cursor hook notice explains the Claude Code settings.json import", async () => {
+  const { env, sel } = await envFor("project");
+  const r = await runInstall(env, { ...sel, agents: ["cursor"] });
+  expect(r.notices.join("\n")).toMatch(/Third-Party Imports/);
+});

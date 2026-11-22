@@ -8,9 +8,21 @@ import { globalLockPath, projectLockPath, readLock } from "../lockfile.js";
 import { msg } from "../messages.js";
 import { readSection, sha256 } from "../merge.js";
 import { roots, shorten } from "../install.js";
+import type { InstalledItem } from "../schema.js";
 import type { CommonOpts } from "./shared.js";
 
 type Finding = { level: "error" | "warn"; text: string };
+
+/** Skills installed for both Claude Code and Cursor in one scope: Cursor reads .claude/skills AND .agents/skills. */
+export function findCursorDuplicates(items: InstalledItem[]): { name: string; scope: string }[] {
+  const key = (i: InstalledItem) => `${i.name}:${i.scope}`;
+  const claude = new Set(
+    items.filter((i) => i.kind === "skill" && i.agent === "claude-code").map(key),
+  );
+  return items
+    .filter((i) => i.kind === "skill" && i.agent === "cursor" && claude.has(key(i)))
+    .map((i) => ({ name: i.name, scope: i.scope }));
+}
 
 async function check(env: Env, label: "project" | "global", path: string, f: Finding[]) {
   const lock = await readLock(path).catch((e: Error) => {
@@ -66,6 +78,14 @@ export async function run(o: CommonOpts) {
           ? msg.doctor.duplicate(k)
           : msg.doctor.drift(k, a.version, g.version),
     });
+  }
+
+  for (const lock of [project, global]) {
+    const dups = findCursorDuplicates(lock?.items ?? []);
+    for (const scope of new Set(dups.map((d) => d.scope))) {
+      const names = dups.filter((d) => d.scope === scope).map((d) => d.name);
+      f.push({ level: "warn", text: msg.doctor.cursorDuplicate(names.length, scope, names[0]!) });
+    }
   }
 
   const major = Number(process.versions.node.split(".")[0]);

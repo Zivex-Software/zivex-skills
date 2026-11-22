@@ -65,3 +65,51 @@ test("every pack resolves and the shipped packs cover the Phase 1 content", asyn
     "workflow-review-qa",
   ]);
 });
+
+import { execFileSync } from "node:child_process";
+import { findCursorDuplicates } from "../src/commands/doctor.js";
+
+test("verify-before-stop plans builds for changed projects and tests by name or by project reference", async () => {
+  const dir = await tempDir();
+  const csproj = (refs: string[] = []) =>
+    `<Project Sdk="Microsoft.NET.Sdk">${refs.map((r) => `<ItemGroup><ProjectReference Include="${r}" /></ItemGroup>`).join("")}</Project>`;
+  await write(dir, {
+    "src/Orders/Orders.csproj": csproj(),
+    "src/Orders/Handler.cs": "class H {}",
+    "src/Billing/Billing.csproj": csproj(),
+    "tests/Orders.Tests/Orders.Tests.csproj": csproj(["..\\..\\src\\Orders\\Orders.csproj"]),
+    "tests/Integration.Tests/Integration.Tests.csproj": csproj(["../../src/Orders/Orders.csproj"]),
+    "tests/Billing.Tests/Billing.Tests.csproj": csproj(["../../src/Billing/Billing.csproj"]),
+    "tests/Other.Tests/Other.Tests.csproj": csproj(),
+  });
+  execFileSync("git", ["init", "-q"], { cwd: dir });
+  const r = spawnSync(
+    process.execPath,
+    [join(defaultContentRoot(), "hooks", "verify-before-stop.mjs")],
+    {
+      input: JSON.stringify({ cwd: dir }),
+      encoding: "utf8",
+      env: { ...process.env, ZIVEX_VERIFY_PLAN: "1" },
+    },
+  );
+  expect(r.status).toBe(0);
+  expect(JSON.parse(r.stdout)).toEqual({
+    build: ["src/Orders/Orders.csproj"],
+    test: [
+      "tests/Integration.Tests/Integration.Tests.csproj",
+      "tests/Orders.Tests/Orders.Tests.csproj",
+    ],
+  });
+});
+
+test("doctor flags skills installed for both Claude Code and Cursor in the same scope only", () => {
+  const item = (agent: "claude-code" | "cursor", scope: "project" | "global", name = "s") =>
+    ({ kind: "skill", name, agent, scope, version: "1", files: {} }) as const;
+  expect(findCursorDuplicates([item("claude-code", "project"), item("cursor", "project")])).toEqual(
+    [{ name: "s", scope: "project" }],
+  );
+  expect(findCursorDuplicates([item("claude-code", "project"), item("cursor", "global")])).toEqual(
+    [],
+  );
+  expect(findCursorDuplicates([item("cursor", "project")])).toEqual([]);
+});

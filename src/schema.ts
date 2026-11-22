@@ -85,6 +85,8 @@ export const lockSchema = z.strictObject({
   skills: z.array(slug).default([]),
   hooks: z.boolean().default(true),
   agents: z.array(agentIdSchema).default([]),
+  /** Agents that should not get always-on rules (e.g. Cursor in hybrid scope). */
+  noRules: z.array(agentIdSchema).default([]),
   items: z.array(installedItemSchema).default([]),
 });
 export type Lock = z.infer<typeof lockSchema>;

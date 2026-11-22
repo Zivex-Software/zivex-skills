@@ -107,6 +107,7 @@ npx skills add zivex-software/zivex-skills --list
 ```sh
 npm ci
 npm run lint && npm run typecheck && npm run format:check && npm test
+npm run gen          # regenerate the skills' check scripts from scripts/gen (CI fails if they are stale)
 npm run smoke        # packs the tarball and runs it through npm, pnpm, yarn, bun (node scripts/smoke.mjs <pm>)
 ```
 

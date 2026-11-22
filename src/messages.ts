@@ -49,6 +49,8 @@ export const msg = {
   askPacks: "Which packs do you want?",
   groupWorkflows: "Workflows",
   groupStack: "Stack",
+  askCursorRules:
+    "Cursor cannot read global rules (user rules only live in Cursor's settings). Write the always-on rules into this repository for Cursor?",
   askHooks: "Install hooks (format on edit, verify before stop, guard destructive commands)?",
   summaryTitle: "This will be written",
   confirmGo: "Write these files?",
@@ -93,6 +95,8 @@ export const msg = {
     missingFile: (p: string) => `Missing ${p}. Fix: zivex-skills sync`,
     modified: (p: string) =>
       `Edited since install: ${p}. Fine if intended; update will ask before overwriting.`,
+    cursorDuplicate: (count: number, scope: string, example: string) =>
+      `${count} skill(s) in ${scope} scope (for example ${example}) are installed for both Claude Code and Cursor. Cursor reads .claude/skills and .agents/skills, so it may list them twice. Harmless; to avoid it choose Claude Code only (Cursor reads those too) or Cursor only.`,
     duplicate: (k: string) =>
       `${k} is installed both globally and in the project. The project copy wins. Remove one to avoid confusion.`,
     drift: (k: string, a: string, b: string) =>

@@ -22,6 +22,8 @@ export interface Selection {
   agents: AgentId[];
   hooks: boolean;
   scope: Scope;
+  /** Agents that skip always-on rules. */
+  noRules?: AgentId[];
 }
 export interface RunOpts {
   dryRun?: boolean;
@@ -59,6 +61,7 @@ export async function runInstall(
     home: env.home,
     codexHome: env.codexHome,
     scope: sel.scope,
+    noRules: sel.noRules ?? [],
   };
   let ops: Op[] = [];
   const notices = new Set<string>();
@@ -126,6 +129,7 @@ export async function runInstall(
         skills: sel.skills,
         hooks: sel.hooks,
         agents: sel.agents,
+        noRules: sel.noRules ?? [],
       };
     }
     await writeLock(path, lock);

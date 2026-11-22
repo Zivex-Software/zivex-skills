@@ -3,7 +3,7 @@
 // No-ops outside .NET repositories, when nothing changed, and on the second stop attempt (stop_hook_active).
 import { execFileSync } from "node:child_process";
 import { readdirSync, readFileSync } from "node:fs";
-import { dirname, join, parse, resolve } from "node:path";
+import { dirname, join, parse, relative, resolve } from "node:path";
 
 const input = (() => {
   try {
@@ -58,13 +58,8 @@ const nearestProject = (file) => {
 const projects = [...new Set(changed.map(nearestProject).filter(Boolean))];
 if (projects.length === 0) process.exit(0);
 
-// Build only the affected projects (their dependents are built when their tests build).
-for (const p of projects) {
-  const r = run("dotnet", ["build", p, "--nologo", "-v", "q"]);
-  if (!r.ok) fail(`dotnet build failed for ${p}:\n${tail(r.out)}`);
-}
-
-// Affected tests: test projects named after a changed project ("Foo.Orders" -> "Foo.Orders.Tests*"), or the changed project itself if it is one.
+// Which projects are affected: the changed projects, plus test projects that either follow the naming
+// convention ("Foo.Orders" -> "Foo.Orders.Tests*") or reference a changed project (<ProjectReference>).
 const all = [];
 const walk = (d, depth) => {
   for (const e of readdirSync(d, { withFileTypes: true })) {
@@ -80,9 +75,38 @@ const walk = (d, depth) => {
 walk(root, 0);
 const stem = (p) => parse(p).name;
 const isTest = (p) => /tests?($|\.)/i.test(stem(p));
+const refsOf = (csproj) => {
+  try {
+    return [
+      ...readFileSync(csproj, "utf8").matchAll(
+        /<ProjectReference\s[^>]*?Include\s*=\s*"([^"]+)"/gi,
+      ),
+    ].map((m) => resolve(dirname(csproj), m[1].replaceAll("\\", "/")));
+  } catch {
+    return [];
+  }
+};
+const changedSet = new Set(projects.map((p) => resolve(p)));
 const tests = new Set(projects.filter(isTest));
-for (const p of projects.filter((x) => !isTest(x))) {
-  for (const t of all.filter(isTest)) if (stem(t).startsWith(`${stem(p)}.`)) tests.add(t);
+for (const t of all.filter(isTest)) {
+  const byName = projects.some((p) => !isTest(p) && stem(t).startsWith(`${stem(p)}.`));
+  const byRef = refsOf(t).some((r) => changedSet.has(r));
+  if (byName || byRef) tests.add(t);
+}
+
+// ZIVEX_VERIFY_PLAN=1 prints the plan instead of running it (used by the tests; handy for debugging).
+if (process.env.ZIVEX_VERIFY_PLAN === "1") {
+  const rel = (p) => relative(root, p).split("\\").join("/");
+  process.stdout.write(
+    JSON.stringify({ build: projects.map(rel).sort(), test: [...tests].map(rel).sort() }),
+  );
+  process.exit(0);
+}
+
+// Build only the affected projects (their dependents are built when their tests build).
+for (const p of projects) {
+  const r = run("dotnet", ["build", p, "--nologo", "-v", "q"]);
+  if (!r.ok) fail(`dotnet build failed for ${p}:\n${tail(r.out)}`);
 }
 for (const t of tests) {
   const r = run("dotnet", ["test", t, "--nologo", "-v", "q"]);

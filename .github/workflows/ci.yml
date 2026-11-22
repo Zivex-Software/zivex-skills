@@ -14,6 +14,11 @@ jobs:
       - uses: actions/setup-node@v4
         with: { node-version: 22, cache: npm }
       - run: npm ci
+      # The skills' check scripts are generated from scripts/gen; fail if the committed copies are stale.
+      - if: runner.os == 'Linux'
+        run: |
+          npm run gen
+          git diff --exit-code -- content/skills
       - run: npm run lint
       - run: npm run typecheck
       - run: npm run format:check

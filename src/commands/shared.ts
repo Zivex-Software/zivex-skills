@@ -86,6 +86,7 @@ export function lockSelection(lock: import("../schema.js").Lock, scope: Scope): 
     skills: lock.skills,
     agents: lock.agents,
     hooks: lock.hooks,
+    noRules: lock.noRules,
     scope: lock.scope ?? scope,
   };
 }

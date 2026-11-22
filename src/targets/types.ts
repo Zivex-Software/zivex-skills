@@ -10,6 +10,8 @@ export interface Ctx {
   /** Codex home: $CODEX_HOME or ~/.codex. */
   codexHome: string;
   scope: Scope;
+  /** Agents that must not receive always-on rules (user declined). */
+  noRules?: AgentId[];
 }
 
 interface Base {

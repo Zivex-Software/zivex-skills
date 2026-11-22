@@ -10,6 +10,7 @@ export const emptyLock = (): Lock => ({
   skills: [],
   hooks: true,
   agents: [],
+  noRules: [],
   items: [],
 });
 

@@ -6,6 +6,6 @@
   },
   "notices": [
     "Cursor: subagents were not installed (no documented file location).",
-    "Cursor: hooks were not installed (no documented file location)."
+    "Cursor: no Cursor-specific hooks installed. Cursor runs the hooks in .claude/settings.json when \"Third-Party Imports\" is on (the default), so select Claude Code as well to get them in Cursor."
   ]
 }

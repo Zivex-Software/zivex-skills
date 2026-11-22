@@ -75,6 +75,13 @@ export async function run(o: CommonOpts) {
     }
   }
 
+  // Cursor has no global rules file, so hybrid scope needs a decision (non-interactive: project + notice).
+  let noRules: AgentId[] = [];
+  if (ui && scope === "hybrid" && agents.includes("cursor")) {
+    if (!bail(await p.confirm({ message: msg.askCursorRules, initialValue: true })))
+      noRules = ["cursor"];
+  }
+
   // Packs
   let packs: string[];
   if (o.packs) {
@@ -119,7 +126,7 @@ export async function run(o: CommonOpts) {
   if (hooks === undefined)
     hooks = ui ? bail(await p.confirm({ message: msg.askHooks, initialValue: true })) : true;
 
-  const sel = { packs, skills: [] as string[], agents, hooks, scope };
+  const sel = { packs, skills: [] as string[], agents, hooks, scope, noRules };
   const prior = await readLock(homeLockPath(env, scope));
   sel.skills = prior.skills;
 
