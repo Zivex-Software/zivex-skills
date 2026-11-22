@@ -1,0 +1,4 @@
+{
+  "categories": { "correctness": "error" },
+  "ignorePatterns": ["dist", "node_modules", "content/hooks/**/*.mjs.golden"]
+}
