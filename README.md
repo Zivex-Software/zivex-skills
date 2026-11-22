@@ -10,16 +10,31 @@ Works with `npx`, `pnpm dlx`, `yarn dlx` and `bunx`. Requires Node 22+. No telem
 
 ## What you get
 
-| Pack                           | Contents                                                                                                     |
-| ------------------------------ | ------------------------------------------------------------------------------------------------------------ |
-| `foundation` (always included) | 6 always-on rules: data handling, structure, verification, change safety, context hygiene, security baseline |
-| `dotnet-core`                  | conventions bootstrap, verify, testing, destructive-command guard                                            |
-| `dotnet-modules`               | module, module context, module contract, boundary check                                                      |
-| `workflow-features`            | feature slices with format-on-edit and verify-before-stop hooks, plus the `dotnet-reviewer` subagent         |
-| `workflow-review-qa`           | independent review, boundary checks, test gaps                                                               |
-| `workflow-greenfield`          | bootstrap conventions, create modules and first slices                                                       |
+| Pack                           | Contents                                                                                                                                            |
+| ------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `foundation` (always included) | 6 always-on rules: data handling, structure, verification, change safety, context hygiene, security baseline                                        |
+| `dotnet-core`                  | conventions bootstrap, verify, testing, destructive-command guard                                                                                   |
+| `dotnet-modules`               | module, module context, module contract, boundary check                                                                                             |
+| `aspnet-security`              | `aspnet-security` (secure coding, hardening, OWASP checklist) and `aspnet-security-audit` (pipeline, endpoint and package audit with a report)      |
+| `aspnet-performance`           | async, allocations, caching (HybridCache, output caching), HTTP/JSON, measuring                                                                     |
+| `aspnet-data`                  | EF Core: queries, N+1, concurrency, transactions, migrations, multi-tenancy                                                                         |
+| `aspnet-api`                   | API design (minimal APIs, ProblemDetails, OpenAPI, versioning), resilience, observability (OpenTelemetry, health checks)                            |
+| `workflow-features`            | feature slices with format-on-edit and verify-before-stop hooks, the `dotnet-reviewer` subagent, plus the security, data, API and performance packs |
+| `workflow-review-qa`           | independent review, boundary checks, plus the security, performance and data packs                                                                  |
+| `workflow-greenfield`          | bootstrap conventions, create modules and first slices, plus the security, data and API packs                                                       |
 
 Every skill is module-first: it identifies the module, reads its `AGENTS.md`, works only inside it, and touches other modules only through their `.Contracts` project. A repo without modules is treated as one module.
+
+## The ASP.NET skills
+
+Seven in-depth skills for ASP.NET Core on **.NET 10 (LTS)**, with notes for .NET 8/9 (out of support since 10 Nov 2026) and .NET 11 (STS). Each has a short `SKILL.md` (workflow and rules), `references/` with details and examples that the agent loads only when needed, and a `scripts/` scanner you can also run yourself:
+
+```sh
+node .claude/skills/aspnet-security/scripts/check-security.mjs .   # also: check-performance, check-efcore, check-api, check-resilience, check-observability
+node .claude/skills/aspnet-security-audit/scripts/audit.mjs .       # pipeline order, endpoint -> authorization map, vulnerable packages
+```
+
+The scanners are regex-based: they find candidates, not proof, and the agent confirms every hit in context. Use `--strict` to fail CI on high findings and `--json` for tooling. Facts in the skills come from the official Microsoft Learn pages; anything the docs did not confirm is marked "verify" in the text.
 
 ## Install
 
