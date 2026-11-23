@@ -15,6 +15,7 @@ A slice is one use case from HTTP edge to database, in one folder, with its test
 
 ## Workflow
 
+0. **See what exists** (optional but fast): `node scripts/slice-inventory.mjs <repo> --module <Module>` lists every slice with which parts it has (endpoint, handler, validation, authorization hint, cancellation token) and how many test files mention it. Use a complete slice as your pattern and read the gaps of the others as the module's known weak spots.
 1. **Pin the use case**: actor, input, output, rules, who may do it, what happens on each failure, idempotency, volumes. Ask if any is unclear. Write the contract (route, request/response, status codes) down first (`aspnet-api-design`).
 2. **Mirror the pattern** in `Features/<UseCase>/` (see `references/slice-anatomy.md` for the default shape): request record, validator, handler, endpoint mapping. Keep types `internal` unless another module needs them (then expose via the contract).
 3. **Implement edge to edge**: bind -> validate -> authorize (policy + ownership/tenant on the loaded resource) -> handler (rules, persistence) -> map to a response DTO -> typed result. Endpoints stay thin.
@@ -22,7 +23,7 @@ A slice is one use case from HTTP edge to database, in one folder, with its test
 5. **Errors**: throw/return domain errors; one global handler maps them to ProblemDetails; no exception text to the client.
 6. **Tests** (`dotnet-testing`): handler tests for rules and failures, one integration test through the real pipeline and database for the happy path, plus the negative authorization test.
 7. **Apply the installed ASP.NET skills**: `aspnet-security` (authz, input), `aspnet-performance` (async, caching), `aspnet-resilience` (outbound calls), `aspnet-observability` (logging/metrics for the use case).
-8. **Verify** with `dotnet-verify` (`node ../dotnet-verify/scripts/affected.mjs --run`).
+8. **Verify** with `dotnet-verify` (`node ../dotnet-verify/scripts/affected.mjs --run`), then run the slice inventory again: your slice should show no gaps (`--strict` exits 1 when a slice lacks an endpoint or handler, an authorization hint or tests).
 
 ## Rules
 
@@ -37,3 +38,4 @@ A slice is one use case from HTTP edge to database, in one folder, with its test
 - `references/slice-anatomy.md` - folder layout, a complete worked slice (request, validator, handler, endpoint, test), result and error handling, variations (queries vs commands, events).
 - `references/slice-checklist.md` - done-definition per slice.
 - `references/mapping-and-persistence.md` - DTO mapping, loading aggregates, concurrency, transactions and outbox inside a slice.
+- `references/review-a-slice.md` - how to review a slice: what to read first, red flags with before/after code, and how to use the inventory script.

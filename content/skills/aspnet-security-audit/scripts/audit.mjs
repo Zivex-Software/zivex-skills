@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Security inventory for an ASP.NET Core repo: pipeline order, endpoint/authorization map, vulnerable packages.
+// Security inventory for an ASP.NET Core repo: pipeline order, endpoint/authorization map, ownership-check candidates, vulnerable packages.
 // Heuristic (text-based). It builds the map you audit from; it does not prove anything is secure.
 // Usage: node audit.mjs [path] [--json] [--no-packages]
 import { execFileSync } from "node:child_process";
@@ -23,7 +23,12 @@ const files = [];
   }
 })(root);
 
-const report = { pipeline: [], endpoints: [], packages: { status: "skipped", lines: [] } };
+const report = {
+  pipeline: [],
+  endpoints: [],
+  ownership: [],
+  packages: { status: "skipped", lines: [] },
+};
 const lineOf = (text, i) => text.slice(0, i).split("\n").length;
 
 // 1. Pipeline order. Each pair [a, b] means "a must appear before b" (Microsoft Learn: middleware order, CORS, rate limiting, antiforgery, output caching, forwarded headers).
@@ -173,6 +178,24 @@ if (!args.includes("--no-packages")) {
   }
 }
 
+// 4. Ownership candidates: an entity is loaded by an id from the caller and nothing nearby mentions a tenant, owner, user or
+// authorization check. Broken object-level authorization is the most common API flaw. A global query filter or a check in another
+// layer makes a hit a false positive: confirm in context.
+const LOAD =
+  /\b(FindAsync|FirstOrDefaultAsync|SingleOrDefaultAsync|FirstAsync|SingleAsync|GetByIdAsync)\s*\(/;
+const BY_ID = /\b(id|\w+Id)\b/;
+const GUARD =
+  /TenantId|[Tt]enant|OwnerId|ownerId|UserId|userId|AccountId|ClaimsPrincipal|\bUser\b|AuthorizeAsync|EnsureAsync|Capabilities|CurrentUser/;
+for (const f of files) {
+  const lines = f.text.split("\n");
+  lines.forEach((l, i) => {
+    if (l.trimStart().startsWith("//") || !LOAD.test(l) || !BY_ID.test(l)) return;
+    if (GUARD.test(lines.slice(Math.max(0, i - 10), i + 11).join("\n"))) return;
+    if (report.ownership.length < 50)
+      report.ownership.push({ file: f.rel, line: i + 1, text: l.trim().slice(0, 120) });
+  });
+}
+
 if (args.includes("--json")) console.log(JSON.stringify(report, null, 2));
 else {
   console.log("## Pipeline");
@@ -185,6 +208,11 @@ else {
       `${e.auth === "NONE" ? "!! " : "   "}${e.route.padEnd(36)} ${e.auth.padEnd(22)} ${e.file}:${e.line}`,
     );
   if (!report.endpoints.length) console.log("No endpoints found.");
+  console.log(
+    "\n## Ownership-check candidates (a load by id with no tenant/owner/user/authorization hint nearby)",
+  );
+  for (const o of report.ownership) console.log(`   ${o.file}:${o.line}  ${o.text}`);
+  if (!report.ownership.length) console.log("None found.");
   console.log(`\n## Packages (${report.packages.status})`);
   for (const l of report.packages.lines) console.log(l);
 }

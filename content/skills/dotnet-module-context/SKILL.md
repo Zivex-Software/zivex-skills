@@ -13,7 +13,7 @@ This skill **is** the module-first step. For a repo without modules the script r
 
 ## Workflow
 
-1. **Locate the module** for the task: search for the type, endpoint, table or route named in the request; the file's project tells you the module.
+1. **Locate the module** for the task: `node scripts/module-context.mjs --find <type, route, table or message name> --root <repo>` groups the hits by module, shows where the term is defined and names the likely owner (`references/locating-the-module.md` covers routes, tables, configuration keys and events). The file's project tells you the module.
 2. **Run the script** with the module name or a path:
    `node scripts/module-context.mjs <Module | path/to/file.cs> --root <repo>` (add `--json` for tooling). It prints: the module's `AGENTS.md` (first 60 lines), projects and roles, public contract types, contracts it **consumes**, modules that **consume** its contract, and the test commands.
    If the module is not detected as you expect, add a `modules.json` at the repo root (see the modules-json reference of `dotnet-module-boundary-check`).
@@ -32,3 +32,6 @@ This skill **is** the module-first step. For a repo without modules the script r
 
 - `references/reading-order.md` - what to open first and why, how to find the right slice, test and contract quickly.
 - `references/summary-template.md` - the context summary to write before changing code.
+- `references/locating-the-module.md` - find the owning module from a type, route, table, config key or event, including the `--find` mode.
+- `references/blast-radius.md` - what a change can break beyond its module: consumers, events, data, tests to run.
+- `references/multi-module-tasks.md` - ordering and reporting when a task crosses modules.

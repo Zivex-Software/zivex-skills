@@ -407,3 +407,160 @@ describe("check-tests", () => {
     expect(f.filter((x) => x.id === "TST009").map((x) => x.line)).toEqual([2]);
   });
 });
+
+describe("module-context --find", () => {
+  test("groups hits by module, names the module that defines the type, and handles routes and unknown terms", async () => {
+    const dir = await tempDir();
+    await write(dir, {
+      "src/Modules/Orders/Orders/Order.cs":
+        "namespace Orders;\npublic record OrderCancelled(Guid Id);\nclass Handler { void F() { var e = new OrderCancelled(id); } }\n",
+      "src/Modules/Orders/Orders/Orders.csproj": proj(),
+      "src/Modules/Billing/Billing/Billing.csproj": proj(),
+      "src/Modules/Billing/Billing/Consumer.cs":
+        "namespace Billing;\nclass C { void On(OrderCancelled e) { } }\n// OrderCancelled in a comment is ignored\n",
+      "src/Modules/Orders/Orders/Routes.cs":
+        'class R { void M(IEndpointRouteBuilder app) { app.MapGet("/orders/{id}", () => 1); } }\n',
+    });
+    const r = json(
+      run(
+        "dotnet-module-context",
+        "module-context.mjs",
+        dir,
+        "--find",
+        "OrderCancelled",
+        "--root",
+        dir,
+        "--json",
+      ),
+    );
+    expect(r.modules.map((m: { module: string }) => m.module).sort()).toEqual([
+      "Billing",
+      "Orders",
+    ]);
+    const orders = r.modules.find((m: { module: string }) => m.module === "Orders");
+    expect(orders.hits).toBe(2);
+    expect(orders.definitions).toEqual(["src/Modules/Orders/Orders/Order.cs:2"]);
+    expect(r.modules.find((m: { module: string }) => m.module === "Billing").hits).toBe(1);
+    const text = run(
+      "dotnet-module-context",
+      "module-context.mjs",
+      dir,
+      "--find",
+      "OrderCancelled",
+      "--root",
+      dir,
+    ).stdout;
+    expect(text).toMatch(/Owner: Orders \(it defines "OrderCancelled"\)/);
+    const route = json(
+      run(
+        "dotnet-module-context",
+        "module-context.mjs",
+        dir,
+        "--find",
+        "/orders/{id}",
+        "--root",
+        dir,
+        "--json",
+      ),
+    );
+    expect(route.modules.map((m: { module: string }) => m.module)).toEqual(["Orders"]);
+    expect(
+      run(
+        "dotnet-module-context",
+        "module-context.mjs",
+        dir,
+        "--find",
+        "NoSuchThing",
+        "--root",
+        dir,
+      ).stdout,
+    ).toMatch(/does not appear/);
+    expect(run("dotnet-module-context", "module-context.mjs", dir, "--find").status).toBe(2);
+  });
+});
+
+describe("slice-inventory", () => {
+  const slice = (name: string, extra = "") =>
+    `namespace Orders.Features.${name};\npublic sealed record ${name}Request(string Reason);\npublic sealed class ${name} { public static void Map(IEndpointRouteBuilder app) => app.MapPost("/x", HandleAsync)${extra};\n  private static async Task<IResult> HandleAsync(${name}Request r, CancellationToken ct) => Results.Ok(); }\n`;
+
+  test("reports which parts each slice has and what is missing", async () => {
+    const dir = await tempDir();
+    await write(dir, {
+      "src/Modules/Orders/Orders/Orders.csproj": proj(),
+      "src/Modules/Orders/Orders/Features/CancelOrder/CancelOrder.cs": `${slice("CancelOrder", ".RequireAuthorization()")}class CancelOrderValidator {}\n`,
+      "src/Modules/Orders/Orders/Features/PayOrder/PayOrder.cs":
+        'namespace Orders.Features.PayOrder;\npublic sealed record PayOrderRequest(decimal Amount);\npublic sealed class PayOrder { public static void Map(IEndpointRouteBuilder app) => app.MapPost("/pay", (PayOrderRequest r) => Results.Ok()); }\n',
+      "tests/Orders.Tests/Orders.Tests.csproj": proj(
+        ["../../src/Modules/Orders/Orders/Orders.csproj"],
+        '<ItemGroup><PackageReference Include="xunit" Version="2" /></ItemGroup>',
+      ),
+      "tests/Orders.Tests/CancelOrderTests.cs":
+        "public class CancelOrderTests { [Fact] public void Cancels() { } }\n",
+    });
+    const r = json(run("dotnet-feature-slice", "slice-inventory.mjs", dir, dir, "--json"));
+    const by = Object.fromEntries(r.slices.map((s: { slice: string }) => [s.slice, s]));
+    expect(by.CancelOrder).toMatchObject({
+      endpoint: true,
+      handler: true,
+      validation: true,
+      authorization: true,
+      cancellation: true,
+      tests: 1,
+      missing: [],
+    });
+    expect(by.PayOrder.missing).toEqual([
+      "authorization",
+      "validation",
+      "cancellation token",
+      "tests",
+    ]);
+    expect(run("dotnet-feature-slice", "slice-inventory.mjs", dir, dir, "--strict").status).toBe(1);
+    expect(
+      run("dotnet-feature-slice", "slice-inventory.mjs", dir, dir, "--module", "Orders").stdout,
+    ).toMatch(/2 slice\(s\), 1 with gaps/);
+  });
+
+  test("Features/<Module>/<Action>.cs layouts make every mapped file its own slice; no slice folders is not an error", async () => {
+    const dir = await tempDir();
+    await write(dir, {
+      "src/Api/Api.csproj": proj(),
+      "src/Api/Features/Catalog/CreateProduct.cs": slice(
+        "CreateProduct",
+        ".RequireAuthorization()",
+      ),
+      "src/Api/Features/Catalog/ListProducts.cs": slice("ListProducts", ".RequireAuthorization()"),
+    });
+    const r = json(run("dotnet-feature-slice", "slice-inventory.mjs", dir, dir, "--json"));
+    expect(
+      r.slices.map((s: { slice: string; group: string }) => `${s.group}/${s.slice}`).sort(),
+    ).toEqual(["Catalog/CreateProduct", "Catalog/ListProducts"]);
+    const none = await tempDir();
+    await write(none, { "src/App/App.csproj": proj(), "src/App/Program.cs": "class P {}" });
+    const q = run("dotnet-feature-slice", "slice-inventory.mjs", none, none, "--strict");
+    expect(q.status).toBe(0);
+    expect(q.stdout).toMatch(/may not use vertical slices/);
+  });
+});
+
+describe("security audit: ownership-check candidates", () => {
+  test("flags a load by id without any tenant, owner, user or authorization hint, and not a guarded one", async () => {
+    const dir = await tempDir();
+    await write(dir, {
+      "Open.cs":
+        "class Open {\n  async Task<Order?> Get(Guid id, Db db) {\n    return await db.Orders.FirstOrDefaultAsync(o => o.Id == id);\n  }\n}\n",
+      "Guarded.cs":
+        "class Guarded {\n  async Task<Order?> Get(Guid id, Db db, ITenant tenant) {\n    return await db.Orders.FirstOrDefaultAsync(o => o.Id == id && o.TenantId == tenant.Id);\n  }\n}\n",
+      "Authorized.cs":
+        'class Authorized {\n  async Task Get(Guid orderId, Db db, IAuthorizationService authz) {\n    var o = await db.Orders.FindAsync(orderId);\n    await authz.AuthorizeAsync(User, o, "OrderOwner");\n  }\n}\n',
+    });
+    const r = JSON.parse(
+      spawnSync(
+        process.execPath,
+        [script("aspnet-security-audit", "audit.mjs"), dir, "--json", "--no-packages"],
+        { encoding: "utf8" },
+      ).stdout,
+    );
+    expect(r.ownership.map((o: { file: string }) => o.file)).toEqual(["Open.cs"]);
+    expect(r.ownership[0].line).toBe(3);
+  });
+});

@@ -73,6 +73,7 @@ const tools = {
   "dotnet-module-contract": ["contract-diff.mjs"],
   "dotnet-verify": ["affected.mjs"],
   "dotnet-module": ["new-module.mjs"],
+  "dotnet-feature-slice": ["slice-inventory.mjs"],
 };
 for (const [skill, files] of Object.entries(tools)) {
   for (const file of files) {
