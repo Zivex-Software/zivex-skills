@@ -1,27 +1,38 @@
 ---
 name: dotnet-testing
-description: Writes and runs focused tests for .NET changes - unit, integration, and module contract tests - following the repo's existing test framework and style. Use when adding behaviour, fixing a bug, or finding test gaps.
+description: Writes and runs focused, deterministic tests for .NET changes - unit, handler, integration (WebApplicationFactory, real databases) and contract tests - in the repo's own framework and style, and scans test code for weak tests. Use when adding behaviour, fixing a bug, finding test gaps, or when tests are flaky or slow.
 ---
 
 # Test .NET code
 
+A test earns its place by failing when the behaviour breaks. Match the repo first; default only when it has no convention.
+
 ## Start here (module first)
 
-1. Identify the module this task belongs to: the folder (usually a `src/Modules/<Name>` or `<Name>.*` project group) that owns the code you will change. If the repo has no modules, treat the whole repo as one module.
-2. Read that module's `AGENTS.md` (or `CLAUDE.md`/README if there is none) and follow it.
-3. Work only inside that module. Reach other modules only through their `.Contracts` project; never reference their internals.
+1. Identify the module and read its `AGENTS.md` (test command, test data approach, what needs Docker).
+2. Find the module's test project and the closest existing test: copy its framework, naming, structure and helpers.
+3. Test through the module's **public surface** (handler, service, endpoint). Other modules are faked or used through their `.Contracts`, never through internals.
 
-## Approach
+## Workflow
 
-1. **Match the repo**: find the module's test project and copy its framework (xUnit, NUnit, MSTest), assertion library, naming and arrange/act/assert style. If the repo has none, default to xUnit with plain asserts, one test project per module named `<Module>.Tests`.
-2. **Bug fix**: write a failing test that reproduces it first, see it fail, then fix.
-3. **New behaviour**: test through the module's public surface (handler, service, endpoint) rather than private helpers. Cover the happy path, validation failures, authorization failure, and the edge cases the change introduces.
-4. **Integration tests**: use what the repo uses (WebApplicationFactory, Testcontainers, an in-memory or local database). Never point tests at a shared or production database. Reset state per test.
-5. **Cross-module**: test against the other module's `.Contracts` (or a fake of it), not its internals.
-6. **Data**: synthetic data only; builders or helpers if the repo has them.
-7. **Run**: `dotnet test <project> --filter <name>` while iterating, then the whole affected project.
+1. **Choose the level** (`references/test-pyramid.md`): handler/unit tests for rules and edge cases; one integration test per endpoint/flow through the real pipeline and a real database; contract tests where modules meet.
+2. **Bug fix**: write the failing test first, watch it fail for the right reason, then fix.
+3. **Cases**: happy path, validation failure, authorization failure (401/403 and wrong tenant/owner), not-found, conflict/concurrency, and the edge cases the change introduces. Boundary values, not just typical ones.
+4. **Integration tests**: `WebApplicationFactory<Program>` against a real database (Testcontainers or the repo's approach); never a shared or production database; reset state per test. See `references/integration-testing.md`.
+5. **Determinism**: inject time (`TimeProvider`), no sleeps, no unseeded randomness, no order dependence, no shared mutable statics. See `references/flaky-and-slow-tests.md`.
+6. **Scan your tests**: `node scripts/check-tests.mjs <path>` flags tests with no assertion, always-true assertions, sleeps, wall-clock time, skipped tests, blocking on tasks, the EF InMemory provider and repos without any pipeline/database test. Heuristic: confirm each hit.
+7. **Run**: `dotnet test <project> --filter "FullyQualifiedName~Name"` while iterating, then the whole affected project (or `node ../dotnet-verify/scripts/affected.mjs --run`).
 
-## Avoid
+## Rules
 
-- Tests that only assert mocks were called, sleeping instead of waiting on a condition, order-dependent tests, snapshots nobody reads.
-- Deleting or loosening an existing test to make a change pass; explain and ask instead.
+- One behaviour per test; name it after the behaviour (`Cancelled_order_cannot_be_paid`), arrange-act-assert, assert the outcome not the implementation.
+- Synthetic data only (builders/factories); never real customer data or secrets.
+- Don't assert that a mock was called when you can assert the result; don't mock what you own (use the real thing with a real database).
+- Never delete, skip or loosen a test to get green; if it is wrong, change it deliberately and say why.
+- A test that cannot fail is worse than no test: remove it or make it assert something.
+
+## References
+
+- `references/test-pyramid.md` - levels, what to test where, naming, structure, test data builders, per-module test projects, contract tests.
+- `references/integration-testing.md` - WebApplicationFactory, authentication in tests, real databases with Testcontainers, resetting data, faking time and HTTP dependencies, asserting logs/metrics.
+- `references/flaky-and-slow-tests.md` - finding nondeterminism, parallelism pitfalls, speeding the suite up, quarantine policy.

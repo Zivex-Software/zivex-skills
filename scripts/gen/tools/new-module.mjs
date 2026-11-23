@@ -1,0 +1,146 @@
+// Plans (and with --apply creates) a new module: implementation project, .Contracts project, test project, AGENTS.md and a
+// registration extension, laid out as siblings (nesting a project inside another project's folder makes the SDK compile its files twice).
+// With --template <Module> it copies an existing module and renames it instead, so the repo's own conventions are followed.
+// Prints the `dotnet sln add` commands instead of running them. Usage:
+//   node new-module.mjs <Name> [--root src/Modules] [--tests tests] [--tfm net10.0] [--template Orders] [--apply]
+import { cpSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
+//@@MODULES@@
+const args = process.argv.slice(2);
+const opt = (n, d) => (args.includes(n) ? args[args.indexOf(n) + 1] : d);
+const valueFlags = new Set(["--root", "--tests", "--tfm", "--template"]);
+const name = args.find((a, i) => !a.startsWith("--") && !valueFlags.has(args[i - 1]));
+if (!name || !/^[A-Z][A-Za-z0-9]*$/.test(name)) {
+  console.error(
+    "Usage: new-module.mjs <Name> (PascalCase) [--root src/Modules] [--tests tests] [--tfm net10.0] [--template Orders] [--apply]",
+  );
+  process.exit(2);
+}
+const repo = resolve(process.cwd());
+const projects = readProjects(repo);
+if (moduleNames(projects).some((m) => m.toLowerCase() === name.toLowerCase())) {
+  console.error(`Module ${name} already exists.`);
+  process.exit(1);
+}
+const apply = args.includes("--apply");
+const rel = (p) => posix(relative(repo, p));
+const template = opt("--template");
+const files = []; // { path, content }
+const copies = []; // { from, to }
+
+if (template) {
+  const mine = projects.filter((p) => p.module?.toLowerCase() === template.toLowerCase());
+  if (!mine.length) {
+    console.error(
+      `Template module ${template} not found. Modules: ${moduleNames(projects).join(", ")}`,
+    );
+    process.exit(1);
+  }
+  const t = mine[0].module;
+  // Copy each project folder; if the module sits in its own folder (e.g. Modules/Orders/), copy that folder instead.
+  const moduleDir = /(?:^|\/)[Mm]odules\/([^/]+)\//.exec(`/${mine[0].rel}`)
+    ? resolve(mine[0].dir, "..")
+    : undefined;
+  const dirs =
+    moduleDir && mine.every((p) => p.dir.startsWith(moduleDir))
+      ? [moduleDir]
+      : [...new Set(mine.map((p) => p.dir))];
+  for (const d of dirs)
+    copies.push({ from: d, to: resolve(repo, rel(d).split(t).join(name)), template: t });
+} else {
+  const root = resolve(repo, opt("--root", "src/Modules"));
+  const testsRoot = resolve(repo, opt("--tests", "tests"));
+  const tfm = opt("--tfm", projects.flatMap((p) => p.tfms)[0] ?? "net10.0");
+  const impl = join(root, name, name);
+  const contracts = join(root, name, `${name}.Contracts`);
+  const tests = join(testsRoot, `${name}.Tests`);
+  const group = (inner) => `\n  <ItemGroup>\n${inner}\n  </ItemGroup>\n`;
+  const csproj = (props, ...groups) =>
+    `<Project Sdk="Microsoft.NET.Sdk">\n\n  <PropertyGroup>\n    <TargetFramework>${tfm}</TargetFramework>\n    <Nullable>enable</Nullable>\n    <ImplicitUsings>enable</ImplicitUsings>${props}\n  </PropertyGroup>\n${groups.join("")}\n</Project>\n`;
+  const backslash = (p) => p.split("/").join("\\");
+  const kebab = name.replace(/([a-z0-9])([A-Z])/g, "$1-$2").toLowerCase();
+  files.push(
+    {
+      path: join(impl, `${name}.csproj`),
+      content: csproj(
+        "",
+        group(`    <ProjectReference Include="..\\${name}.Contracts\\${name}.Contracts.csproj" />`),
+        group(`    <FrameworkReference Include="Microsoft.AspNetCore.App" />`),
+      ),
+    },
+    {
+      path: join(impl, `${name}Module.cs`),
+      content: `using Microsoft.AspNetCore.Builder;\nusing Microsoft.AspNetCore.Http;\nusing Microsoft.AspNetCore.Routing;\nusing Microsoft.Extensions.DependencyInjection;\n\nnamespace ${name};\n\npublic static class ${name}Module\n{\n    /// <summary>Registers the ${name} module. Called once from the host.</summary>\n    public static IServiceCollection Add${name}Module(this IServiceCollection services)\n    {\n        // Register the module's services here (internal implementations of the contract).\n        return services;\n    }\n\n    /// <summary>Maps the ${name} endpoints. Called once from the host.</summary>\n    public static IEndpointRouteBuilder Map${name}Endpoints(this IEndpointRouteBuilder app)\n    {\n        var group = app.MapGroup("/${kebab}").WithTags("${name}");\n        // group.MapGet("/", ...);\n        return app;\n    }\n}\n`,
+    },
+    { path: join(contracts, `${name}.Contracts.csproj`), content: csproj("") },
+    {
+      path: join(contracts, `I${name}Api.cs`),
+      content: `namespace ${name}.Contracts;\n\n/// <summary>Public API of the ${name} module for other modules.</summary>\npublic interface I${name}Api\n{\n}\n`,
+    },
+    {
+      path: join(root, name, "AGENTS.md"),
+      content: `# ${name} module\n\n## Purpose\n<one sentence: what this module owns>\n\n## Public contract\n\`${name}.Contracts\`: <interfaces, DTOs and events other modules may use>. Nothing else is public.\n\n## Layout\n- \`${name}/\`: implementation (internal), registered by \`Add${name}Module\`, endpoints mapped by \`Map${name}Endpoints\`\n- \`${name}.Contracts/\`: the public contract\n- \`${rel(tests)}/\`: tests for this module\n\n## Rules\n- Reach other modules only through their \`.Contracts\` project.\n- Own your data: tables and schema belong to this module; no cross-module joins.\n\n## Test\n\`dotnet test ${rel(tests)}\`\n`,
+    },
+    {
+      path: join(tests, `${name}ModuleTests.cs`),
+      content: `using Microsoft.Extensions.DependencyInjection;\nusing Xunit;\n\nnamespace ${name}.Tests;\n\npublic class ${name}ModuleTests\n{\n    [Fact]\n    public void Module_registers_and_the_container_builds()\n    {\n        var services = new ServiceCollection();\n\n        services.Add${name}Module();\n\n        using var provider = services.BuildServiceProvider(validateScopes: true);\n        Assert.NotNull(provider);\n    }\n}\n`,
+    },
+    {
+      path: join(tests, `${name}.Tests.csproj`),
+      content: csproj(
+        "\n    <IsPackable>false</IsPackable>",
+        group(
+          `    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="*" />\n    <PackageReference Include="xunit" Version="*" />\n    <PackageReference Include="xunit.runner.visualstudio" Version="*" />`,
+        ),
+        group(
+          `    <ProjectReference Include="${backslash(posix(relative(tests, join(impl, `${name}.csproj`))))}" />`,
+        ),
+      ),
+    },
+  );
+}
+
+console.log(
+  `${apply ? "Creating" : "Plan (nothing written; add --apply)"}: module ${name}${template ? ` (copy of ${template})` : ""}`,
+);
+for (const f of files) console.log(`  + ${rel(f.path)}`);
+for (const c of copies)
+  console.log(
+    `  + ${rel(c.to)}/   (copy of ${rel(c.from)}/ with "${c.template}" renamed to "${name}")`,
+  );
+if (template)
+  console.log(
+    "  note: copied business code is only a starting point; delete what does not apply and review the contract.",
+  );
+
+if (apply) {
+  for (const f of files) {
+    mkdirSync(dirname(f.path), { recursive: true });
+    writeFileSync(f.path, f.content, { flag: "wx" });
+  }
+  for (const c of copies) {
+    cpSync(c.from, c.to, { recursive: true, filter: (s) => !SKIP_DIRS.has(basename(s)) });
+    const rename = (d) => {
+      for (const e of readdirSync(d, { withFileTypes: true })) {
+        let path = join(d, e.name);
+        if (e.name.includes(c.template)) {
+          const next = join(d, e.name.split(c.template).join(name));
+          cpSync(path, next, { recursive: true });
+          rmSync(path, { recursive: true });
+          path = next;
+        }
+        if (e.isDirectory()) rename(path);
+        else if (/\.(cs|csproj|md|json|ya?ml)$/.test(path))
+          writeFileSync(path, readFileSync(path, "utf8").split(c.template).join(name));
+      }
+    };
+    rename(c.to);
+  }
+}
+const csprojs = files.filter((f) => f.path.endsWith(".csproj")).map((f) => rel(f.path));
+console.log("\nNext steps:");
+if (csprojs.length) for (const c of csprojs) console.log(`  dotnet sln add ${c}`);
+else console.log("  dotnet sln add <each copied *.csproj>");
+console.log(`  host: services.Add${name}Module(); app.Map${name}Endpoints();`);
+console.log(
+  "  then: dotnet build, node check-boundaries.mjs (dotnet-module-boundary-check), and fill in AGENTS.md",
+);

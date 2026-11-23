@@ -79,3 +79,114 @@ describe.skipIf(!hasDotnet)("hooks against a real .NET solution", () => {
     expect(runHook("verify-before-stop", dir, { stop_hook_active: true }).status).toBe(0);
   }, 300_000);
 });
+
+describe.skipIf(!hasDotnet)("dotnet-* tools against a real SDK", () => {
+  let dir: string;
+  const skills = join(defaultContentRoot(), "skills");
+  const node = (skill: string, file: string, ...args: string[]) =>
+    spawnSync(process.execPath, [join(skills, skill, "scripts", file), ...args], {
+      cwd: dir,
+      encoding: "utf8",
+    });
+  const gitc = (...a: string[]) =>
+    execFileSync("git", ["-c", "user.email=t@t.t", "-c", "user.name=t", ...a], { cwd: dir });
+
+  beforeAll(async () => {
+    dir = await tempDir();
+    execFileSync("git", ["init", "-q"], { cwd: dir });
+    await write(dir, { ".gitignore": "bin/\nobj/\n" });
+    dotnet(["new", "sln", "--format", "slnx", "-n", "Shop"], dir);
+    for (const m of ["Orders", "Billing"])
+      expect(node("dotnet-module", "new-module.mjs", m, "--apply").status).toBe(0);
+    for (const p of [
+      "src/Modules/Orders/Orders/Orders.csproj",
+      "src/Modules/Orders/Orders.Contracts/Orders.Contracts.csproj",
+      "tests/Orders.Tests/Orders.Tests.csproj",
+      "src/Modules/Billing/Billing/Billing.csproj",
+      "src/Modules/Billing/Billing.Contracts/Billing.Contracts.csproj",
+      "tests/Billing.Tests/Billing.Tests.csproj",
+    ])
+      dotnet(["sln", "add", p], dir);
+    gitc("add", "-A");
+    gitc("commit", "-qm", "base");
+  }, 300_000);
+
+  test("modules created by new-module build, pass their starter tests, and have clean boundaries", async () => {
+    dotnet(["build", "Shop.slnx", "--nologo", "-v", "q"], dir);
+    const out = dotnet(["test", "Shop.slnx", "--nologo"], dir).toString();
+    expect(out.match(/Passed!/g)).toHaveLength(2);
+    const check = node(
+      "dotnet-module-boundary-check",
+      "check-boundaries.mjs",
+      ".",
+      "--json",
+      "--strict",
+    );
+    expect(check.status).toBe(0);
+    expect(JSON.parse(check.stdout)).toMatchObject({
+      modules: ["Billing", "Orders"],
+      findings: [],
+    });
+    const ctx = JSON.parse(
+      node("dotnet-module-context", "module-context.mjs", "Orders", "--json").stdout,
+    );
+    expect(ctx.contractTypes["Orders.Contracts"]).toEqual(["interface IOrdersApi"]);
+  }, 300_000);
+
+  test("affected --run builds and tests only the changed module", async () => {
+    await write(dir, {
+      "src/Modules/Orders/Orders/Extra.cs":
+        "namespace Orders;\n\ninternal static class Extra\n{\n}\n",
+    });
+    const r = node("dotnet-verify", "affected.mjs", "--run", "--json");
+    expect(r.status, r.stdout + r.stderr).toBe(0);
+    const out = JSON.parse(r.stdout);
+    expect(out.plan.modules).toEqual(["Orders"]);
+    expect(out.plan.test).toEqual(["tests/Orders.Tests/Orders.Tests.csproj"]);
+    expect(out.results.every((x: { ok: boolean }) => x.ok)).toBe(true);
+
+    // Badly formatted code fails the format step (and only that step).
+    await write(dir, {
+      "src/Modules/Orders/Orders/Extra.cs":
+        "namespace Orders;\ninternal static class Extra {   }\n",
+    });
+    const bad = JSON.parse(node("dotnet-verify", "affected.mjs", "--run", "--json").stdout);
+    expect(
+      bad.results.filter((x: { ok: boolean }) => !x.ok).map((x: { step: string }) => x.step),
+    ).toEqual([expect.stringContaining("dotnet format")]);
+    await write(dir, {
+      "src/Modules/Orders/Orders/Extra.cs":
+        "namespace Orders;\n\ninternal static class Extra\n{\n}\n",
+    });
+  }, 300_000);
+
+  test("a boundary violation introduced by hand is caught, and a contract change is classified", async () => {
+    const billing = "src/Modules/Billing/Billing/Billing.csproj";
+    const text = await readFile(join(dir, billing), "utf8");
+    await write(dir, {
+      [billing]: text.replace(
+        "</Project>",
+        '  <ItemGroup>\n    <ProjectReference Include="..\\..\\Orders\\Orders\\Orders.csproj" />\n  </ItemGroup>\n</Project>',
+      ),
+    });
+    const check = node(
+      "dotnet-module-boundary-check",
+      "check-boundaries.mjs",
+      ".",
+      "--json",
+      "--strict",
+    );
+    expect(check.status).toBe(1);
+    expect(JSON.parse(check.stdout).findings.map((f: { id: string }) => f.id)).toContain("BND001");
+
+    await write(dir, {
+      "src/Modules/Orders/Orders.Contracts/IOrdersApi.cs":
+        "namespace Orders.Contracts;\n\npublic interface IOrdersApi\n{\n    Task<string> GetAsync(Guid id);\n}\n",
+    });
+    const diff = JSON.parse(
+      node("dotnet-module-contract", "contract-diff.mjs", "Orders", "--json").stdout,
+    );
+    expect(diff.breaking).toEqual([]);
+    expect(diff.additive.join()).toMatch(/GetAsync/);
+  }, 300_000);
+});

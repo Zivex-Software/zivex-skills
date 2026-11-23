@@ -36,6 +36,23 @@ node .claude/skills/aspnet-security-audit/scripts/audit.mjs .       # pipeline o
 
 The scanners are regex-based: they find candidates, not proof, and the agent confirms every hit in context. Use `--strict` to fail CI on high findings and `--json` for tooling. Facts in the skills come from the official Microsoft Learn pages; anything the docs did not confirm is marked "verify" in the text.
 
+## The module skills
+
+The eight `dotnet-*` skills run on any .NET repository (a repo without modules is treated as one module). Each has `references/` and a script, all Node and cross-platform:
+
+| Skill                          | Script                 | What it does                                                                                 |
+| ------------------------------ | ---------------------- | -------------------------------------------------------------------------------------------- |
+| `dotnet-module-context`        | `module-context.mjs`   | AGENTS.md, projects, public contract types, consumed/consuming modules, test commands        |
+| `dotnet-module-boundary-check` | `check-boundaries.mjs` | cross-module references, cycles, `InternalsVisibleTo`, contract hygiene (`--strict` for CI)  |
+| `dotnet-module-contract`       | `contract-diff.mjs`    | breaking vs additive changes of a `.Contracts` project against a git ref                     |
+| `dotnet-module`                | `new-module.mjs`       | plans or creates a module (siblings, contract, tests, AGENTS.md) or copies one as a template |
+| `dotnet-conventions-bootstrap` | `inspect-repo.mjs`     | maps solutions, modules, build settings, test and library stack, CI, existing agent docs     |
+| `dotnet-verify`                | `affected.mjs`         | what a change affects; `--run` builds, tests and format-checks exactly that                  |
+| `dotnet-testing`               | `check-tests.mjs`      | weak tests: no assertions, sleeps, wall-clock time, skipped tests, InMemory provider         |
+| `dotnet-feature-slice`         | -                      | slice anatomy, a worked example and checklists                                               |
+
+Modules are found by convention (`Modules/<Name>/`, or the project name minus role suffix and company prefix) or described in a `modules.json` at the repo root. The scripts are tested against a real .NET SDK in CI.
+
 ## Install
 
 ```sh

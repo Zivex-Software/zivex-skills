@@ -111,13 +111,14 @@ const RULES = [
 ];
 
 // Heuristic, regex-based scan of a .NET repo (.cs and appsettings*.json). It finds candidates, not proof:
-// read every hit in context before changing code. Skips bin/obj/node_modules/.git and test projects.
+// read every hit in context before changing code. Skips bin/obj/node_modules/.git; scans production code (test projects are skipped).
 // Usage: node <this-file> [path] [--json] [--strict]    (--strict: exit 1 when any HIGH finding exists)
 import { readdirSync, readFileSync } from "node:fs";
 import { join, relative } from "node:path";
 
 const args = process.argv.slice(2);
 const root = args.find((a) => !a.startsWith("--")) ?? process.cwd();
+const SCOPE = "code";
 const SKIP = new Set(["bin", "obj", "node_modules", ".git", ".vs", "TestResults"]);
 const isTest = (rel) => /(^|[\\/])[^\\/]*\.?tests?([\\/]|\.)/i.test(rel);
 
@@ -133,7 +134,8 @@ const lineOf = (text, index) => text.slice(0, index).split("\n").length;
 const files = [];
 for (const abs of walk(root)) {
   const rel = relative(root, abs).split("\\").join("/");
-  if (!isTest(rel)) files.push({ rel, text: readFileSync(abs, "utf8"), cs: abs.endsWith(".cs") });
+  if (SCOPE === "tests" ? isTest(rel) : !isTest(rel))
+    files.push({ rel, text: readFileSync(abs, "utf8"), cs: abs.endsWith(".cs") });
 }
 
 const findings = [];

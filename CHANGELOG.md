@@ -17,5 +17,7 @@ First release (Phase 1).
 - Fix: `verify-before-stop` no longer silently does nothing on Windows (git prints forward slashes).
 - Claude Code plugin and marketplace (`.claude-plugin/`, `plugin/`): one plugin with all skills, the reviewer subagent, the hooks and the foundation rules as SessionStart context; generated from `content/` (`npm run gen`), version kept in sync with the package, validated with `claude plugin validate`.
 - Repository hygiene: SECURITY.md (private vulnerability reporting), CONTRIBUTING.md (content rules), issue and PR templates, Dependabot, CodeQL, least-privilege CI permissions with concurrency control.
+- The eight `dotnet-*` skills now have `references/` and scripts (`module-context`, `check-boundaries`, `contract-diff`, `new-module`, `inspect-repo`, `affected`, `check-tests`), with shared module detection (`modules.json` to override conventions). Verified against a real .NET SDK: generated modules build and pass their starter test, `affected --run` builds and tests only what changed, and a boundary violation or contract change is detected.
+- Fix: `new-module` generated a module that did not compile (missing `using` for `WithTags`); found by building it with the real SDK.
 - Tooling: TypeScript 7.0.2.
 - Safety: backups before merging into user files, content hashes to detect local edits, idempotent installs, complete removal.
