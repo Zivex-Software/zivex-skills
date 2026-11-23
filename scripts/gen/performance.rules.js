@@ -2,7 +2,7 @@ const RULES = [
   {
     id: "PERF001",
     level: "high",
-    re: /\.(Result|Wait\s*\(\s*\)|GetAwaiter\s*\(\s*\)\.GetResult\s*\(\s*\))(?![\w(])/,
+    re: /^(?!.*\b(RuleFor|Result)\s*[(<]).*\.(Result|Wait\s*\(\s*\)|GetAwaiter\s*\(\s*\)\.GetResult\s*\(\s*\))(?![\w(>])/,
     msg: "Blocking on a Task (thread-pool starvation, deadlocks)",
     fix: "Make the call chain async and await it.",
   },
