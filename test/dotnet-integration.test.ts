@@ -98,15 +98,22 @@ describe.skipIf(!hasDotnet)("dotnet-* tools against a real SDK", () => {
     dotnet(["new", "sln", "--format", "slnx", "-n", "Shop"], dir);
     for (const m of ["Orders", "Billing"])
       expect(node("dotnet-module", "new-module.mjs", m, "--apply").status).toBe(0);
-    for (const p of [
-      "src/Modules/Orders/Orders/Orders.csproj",
-      "src/Modules/Orders/Orders.Contracts/Orders.Contracts.csproj",
-      "tests/Orders.Tests/Orders.Tests.csproj",
-      "src/Modules/Billing/Billing/Billing.csproj",
-      "src/Modules/Billing/Billing.Contracts/Billing.Contracts.csproj",
-      "tests/Billing.Tests/Billing.Tests.csproj",
-    ])
-      dotnet(["sln", "add", p], dir);
+    // One command with explicit projects: `sln add` otherwise adds referenced projects itself and reports them as duplicates (differs per SDK version).
+    dotnet(
+      [
+        "sln",
+        "add",
+        "src/Modules/Orders/Orders/Orders.csproj",
+        "src/Modules/Orders/Orders.Contracts/Orders.Contracts.csproj",
+        "tests/Orders.Tests/Orders.Tests.csproj",
+        "src/Modules/Billing/Billing/Billing.csproj",
+        "src/Modules/Billing/Billing.Contracts/Billing.Contracts.csproj",
+        "tests/Billing.Tests/Billing.Tests.csproj",
+        "--include-references",
+        "false",
+      ],
+      dir,
+    );
     gitc("add", "-A");
     gitc("commit", "-qm", "base");
   }, 300_000);

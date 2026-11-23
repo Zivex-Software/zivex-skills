@@ -331,7 +331,9 @@ describe("new-module", () => {
     expect(await readFile(join(dir, "tests/Orders.Tests/Orders.Tests.csproj"), "utf8")).toContain(
       "..\\..\\src\\Modules\\Orders\\Orders\\Orders.csproj",
     );
-    expect(done.stdout).toMatch(/dotnet sln add src\/Modules\/Orders\/Orders\/Orders\.csproj/);
+    expect(done.stdout).toMatch(
+      /dotnet sln add src\/Modules\/Orders\/Orders\/Orders\.csproj .*tests\/Orders\.Tests\/Orders\.Tests\.csproj --include-references false/,
+    );
 
     // The new module is detected as a module, with no boundary problems of its own.
     const check = run("dotnet-module-boundary-check", "check-boundaries.mjs", dir, dir, "--json");

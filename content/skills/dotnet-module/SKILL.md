@@ -18,7 +18,7 @@ A module is a bounded area with its own data and a small public contract. Start 
 1. **Plan the scaffold** (writes nothing): `node scripts/new-module.mjs <Name>` prints the files it would create. Layout (siblings, never nested):
    `src/Modules/<Name>/<Name>/` (implementation), `src/Modules/<Name>/<Name>.Contracts/`, `tests/<Name>.Tests/`, plus `src/Modules/<Name>/AGENTS.md`.
    To follow an existing module's conventions use `--template <Module>`: it copies that module and renames it everywhere; then delete the business code that does not apply.
-2. **Create it**: re-run with `--apply` (refuses to overwrite). Add the projects to the solution with the printed `dotnet sln add` commands, register in the host (`services.Add<Name>Module(); app.Map<Name>Endpoints();`).
+2. **Create it**: re-run with `--apply` (refuses to overwrite). Add the projects to the solution with the printed `dotnet sln add ... --include-references false` command, register in the host (`services.Add<Name>Module(); app.Map<Name>Endpoints();`).
 3. **Verify the skeleton**: `dotnet build` and `dotnet test` (a starter test checks that the module registers and the container builds), then `node ../dotnet-module-boundary-check/scripts/check-boundaries.mjs . --strict`.
 4. **Define the contract first** (`dotnet-module-contract`): the smallest interface/DTOs/events other modules need.
 5. **Own the data**: its own schema/tables and (ideally) its own `DbContext` and migrations history table; no cross-module joins. See `references/module-anatomy.md`.

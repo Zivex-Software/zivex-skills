@@ -3,7 +3,7 @@
 // Plans (and with --apply creates) a new module: implementation project, .Contracts project, test project, AGENTS.md and a
 // registration extension, laid out as siblings (nesting a project inside another project's folder makes the SDK compile its files twice).
 // With --template <Module> it copies an existing module and renames it instead, so the repo's own conventions are followed.
-// Prints the `dotnet sln add` commands instead of running them. Usage:
+// Prints the `dotnet sln add` command instead of running it. Usage:
 //   node new-module.mjs <Name> [--root src/Modules] [--tests tests] [--tfm net10.0] [--template Orders] [--apply]
 import { cpSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { readdirSync, readFileSync } from "node:fs";
@@ -116,6 +116,7 @@ const rel = (p) => posix(relative(repo, p));
 const template = opt("--template");
 const files = []; // { path, content }
 const copies = []; // { from, to }
+let copiedProjects = []; // csproj paths a --template copy will create
 
 if (template) {
   const mine = projects.filter((p) => p.module?.toLowerCase() === template.toLowerCase());
@@ -126,6 +127,7 @@ if (template) {
     process.exit(1);
   }
   const t = mine[0].module;
+  copiedProjects = mine.map((x) => x.rel.split(t).join(name));
   // Copy each project folder; if the module sits in its own folder (e.g. Modules/Orders/), copy that folder instead.
   const moduleDir = /(?:^|\/)[Mm]odules\/([^/]+)\//.exec(`/${mine[0].rel}`)
     ? resolve(mine[0].dir, "..")
@@ -226,10 +228,13 @@ if (apply) {
     rename(c.to);
   }
 }
-const csprojs = files.filter((f) => f.path.endsWith(".csproj")).map((f) => rel(f.path));
+const csprojs = [
+  ...files.filter((f) => f.path.endsWith(".csproj")).map((f) => rel(f.path)),
+  ...copiedProjects,
+];
 console.log("\nNext steps:");
-if (csprojs.length) for (const c of csprojs) console.log(`  dotnet sln add ${c}`);
-else console.log("  dotnet sln add <each copied *.csproj>");
+// One command, references not auto-added: `dotnet sln add` otherwise pulls in referenced projects and then reports them as duplicates (behaviour differs per SDK version).
+console.log(`  dotnet sln add ${csprojs.join(" ")} --include-references false`);
 console.log(`  host: services.Add${name}Module(); app.Map${name}Endpoints();`);
 console.log(
   "  then: dotnet build, node check-boundaries.mjs (dotnet-module-boundary-check), and fill in AGENTS.md",
