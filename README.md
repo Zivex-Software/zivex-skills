@@ -1,3 +1,5 @@
+<p align="center"><img src="assets/logo.png" alt="Zivex" width="96" height="96"></p>
+
 # zivex-skills
 
 Install AI-agent skills, always-on rules, hooks and subagents for **.NET modular-monolith** development into **Claude Code**, **Cursor** and **Codex**. Built on the open [Agent Skills](https://agentskills.io) standard, so the skills also work with `npx skills`.
