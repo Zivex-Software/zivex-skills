@@ -213,14 +213,14 @@ describe("check-boundaries", () => {
   test("more InternalsVisibleTo and using forms are caught; framework namespaces are not mistaken for modules", async () => {
     const dir = await tempDir();
     await write(dir, {
-      "src/Modules/Orders/Orders/Orders.csproj": proj(),
+      "src/Modules/Orders/Orders/Acme.Orders.csproj": proj(),
       "src/Modules/Orders/Orders/A.cs":
-        '[assembly: InternalsVisibleTo("Billing, PublicKey=0024")]\n[assembly: InternalsVisibleTo(assemblyName: "Identity")]\nglobal using Acme.Billing.Internal;\nusing B = Acme.Billing.Domain.Invoice;\nusing Microsoft.AspNetCore.Identity;\nclass A {}\n',
-      "src/Modules/Billing/Billing/Billing.csproj": proj(
+        '[assembly: InternalsVisibleTo("Acme.Billing, PublicKey=0024")]\n[assembly: InternalsVisibleTo(assemblyName: "Acme.Identity")]\nglobal using Acme.Billing.Internal;\nusing B = Acme.Billing.Domain.Invoice;\nusing Microsoft.AspNetCore.Identity;\nclass A {}\n',
+      "src/Modules/Billing/Billing/Acme.Billing.csproj": proj(
         [],
-        "<ItemGroup><ProjectReference Include='..\\..\\Orders\\Orders\\Orders.csproj' /></ItemGroup>",
+        "<ItemGroup><ProjectReference Include='..\\..\\Orders\\Orders\\Acme.Orders.csproj' /></ItemGroup>",
       ),
-      "src/Modules/Identity/Identity/Identity.csproj": proj(),
+      "src/Modules/Identity/Identity/Acme.Identity.csproj": proj(),
     });
     const f = json(boundaries(dir)).findings as { id: string; msg: string }[];
     expect(

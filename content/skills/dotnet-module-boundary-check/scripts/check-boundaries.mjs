@@ -49,6 +49,16 @@ function* walkFiles(dir, depth = 0) {
   }
 }
 
+// Target framework set in the nearest Directory.Build.props above the project (stops at the repo root).
+function inheritedTfm(file, root) {
+  for (let d = dirname(file); ; d = dirname(d)) {
+    const t = tryRead(join(d, "Directory.Build.props"));
+    const m = t && /<TargetFrameworks?>([^<$]+)</i.exec(t);
+    if (m) return m[1];
+    if (d === root || d === dirname(d)) return undefined;
+  }
+}
+
 function readProjects(root) {
   const projects = [];
   for (const file of walkFiles(root)) {
@@ -76,7 +86,7 @@ function readProjects(root) {
       ivt: all(/<InternalsVisibleTo\s[^>]*?Include\s*=\s*["']([^"']+)["']/gi).map((n) =>
         n.split(",")[0].trim(),
       ),
-      tfms: (/<TargetFrameworks?>([^<]+)</i.exec(text)?.[1] ?? "")
+      tfms: (/<TargetFrameworks?>([^<]+)</i.exec(text)?.[1] ?? inheritedTfm(file, root) ?? "")
         .split(";")
         .map((t) => t.trim())
         .filter(Boolean),
@@ -126,20 +136,47 @@ function detectModules(projects, root) {
     return hits[0];
   };
 
+  // When the repository clearly organises modules as Modules/<Name>/ (at least 4 projects), everything outside that folder
+  // (hosts, building blocks, tools, cross-cutting tests) belongs to no module: a product or company name is not a module.
+  const pathHit = (p) => /(?:^|\/)[Mm]odules\/([^/]+)\//.exec(`/${p.rel}`);
+  const pathMode = !config.modules && projects.filter((p) => pathHit(p)).length >= 4;
+  const fixed = new Set(); // projects whose module came from modules.json or the Modules/<Name> folder
+
   for (const [i, p] of projects.entries()) {
-    const contracts = /\.Contracts$/i.test(p.name);
-    p.role = p.isTest ? "test" : contracts ? "contracts" : "impl";
     let module;
     const hit = configured(p.rel);
-    const m = /(?:^|\/)[Mm]odules\/([^/]+)\//.exec(`/${p.rel}`);
+    const m = pathHit(p);
     if (hit) module = hit.module;
     else if (m) module = m[1];
+    else if (pathMode && !p.isTest) module = null; // tests fall through to their name, then to what they reference
     else if (SHARED_NAME.test(bases[i]) || HOST_NAME.test(bases[i])) module = null;
     // Acme.Api / Acme.Web: nothing left after the company prefix, so it is the host, not a module named "Acme".
     else if (prefix && bases[i] === prefix.slice(0, -1)) module = null;
     else module = prefix && bases[i].startsWith(prefix) ? bases[i].slice(prefix.length) : bases[i];
+    if (hit || m) fixed.add(p);
     p.module = module;
-    if (module === null) p.role = "shared";
+    // "Zivex.Modules.Contracts" is the implementation of a module that is called Contracts; "Quotes.Contracts" is a contract project.
+    const named =
+      /\.Contracts$/i.test(p.name) &&
+      !(module === "Contracts" && !/\.Contracts\.Contracts$/i.test(p.name));
+    p.role = p.isTest ? "test" : named ? "contracts" : "impl";
+    if (module === null && !p.isTest) p.role = "shared";
+  }
+
+  // A test project belongs to the module its name points at; otherwise to the one module it references. One that references
+  // several modules (architecture, integration, security suites) is cross-cutting and belongs to none.
+  const byPath = new Map(projects.map((p) => [resolve(p.file), p]));
+  const known = new Set(projects.filter((x) => !x.isTest && x.module).map((x) => x.module));
+  for (const p of projects.filter((x) => x.isTest && !fixed.has(x))) {
+    if (p.module && known.has(p.module)) continue; // the name points at a real module (Orders.Tests -> Orders): keep it
+    const mods = new Set(
+      p.refs
+        .map((r) => byPath.get(r))
+        .filter((t) => t && !t.isTest && t.module)
+        .map((t) => t.module),
+    );
+    if (mods.size === 1) p.module = [...mods][0];
+    else if (mods.size > 1 || pathMode) p.module = null;
   }
   return projects;
 }
@@ -285,6 +322,21 @@ for (const p of projects.filter((x) => x.role === "contracts")) {
     );
 }
 
+const underAny = (ns, names) => names.some((n) => ns === n || ns.startsWith(`${n}.`));
+const sharedNames = projects.filter((p) => p.role === "shared").map((p) => p.name);
+const implNames = new Map(
+  modules.map((m) => [
+    m,
+    projects.filter((p) => p.module === m && p.role === "impl").map((p) => p.name),
+  ]),
+);
+const contractNames = new Map(
+  modules.map((m) => [
+    m,
+    projects.filter((p) => p.module === m && p.role === "contracts").map((p) => p.name),
+  ]),
+);
+
 // Source scan: InternalsVisibleTo to another module, and using directives into another module's namespaces.
 const ivtFinding = (p, name, file, line) => {
   const t = projects.find((x) => x.name === name);
@@ -311,16 +363,23 @@ for (const file of walkFiles(root)) {
     // using X.Y; / global using X.Y; / using static X.Y; / using Alias = X.Y.Z;
     const use = /^\s*(?:global\s+)?using\s+(?:static\s+)?(?:\w+\s*=\s*)?([\w.]+)\s*;/.exec(line);
     if (use && p.role !== "contracts") {
-      const seg = use[1].split(".");
-      if (VENDOR_ROOTS.has(seg[0])) return;
-      const other = modules.find((m) => m !== p.module && seg.slice(0, 3).includes(m));
-      if (other && !seg.includes("Contracts"))
+      const ns = use[1];
+      if (VENDOR_ROOTS.has(ns.split(".")[0]) || underAny(ns, sharedNames)) return;
+      // The namespace follows the project name (the .NET default): a using that starts with another module's implementation project
+      // name, and not with one of its Contracts project names, reaches into that module.
+      const other = modules.find(
+        (m) =>
+          m !== p.module &&
+          underAny(ns, implNames.get(m) ?? []) &&
+          !underAny(ns, contractNames.get(m) ?? []),
+      );
+      if (other)
         add(
           "BND006",
           "medium",
           rel(file),
           i + 1,
-          `using ${use[1]} reaches into module ${other} outside its Contracts namespace`,
+          `using ${ns} reaches into module ${other} outside its Contracts namespace`,
           `Use ${other}.Contracts types only.`,
         );
     }

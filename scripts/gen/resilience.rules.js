@@ -86,9 +86,9 @@ const RULES = [
         ? text
             .split("\n")
             .flatMap((l, i) =>
-              /GetRequiredService\s*<\s*\w*(DbContext|Repository)\w*\s*>|private\s+readonly\s+\w*DbContext\b/.test(
-                l,
-              )
+              /private\s+readonly\s+\w*DbContext\b/.test(l) ||
+              (!/Create(Async)?Scope\s*\(/.test(text) &&
+                /GetRequiredService\s*<\s*\w*(DbContext|Repository)\w*\s*>/.test(l))
                 ? [i + 1]
                 : [],
             )

@@ -81,10 +81,10 @@ const RULES = [
             if (ch === "}") depth--;
           }
           body += `${lines[k]}\n`;
-          if ((started && depth === 0) || /=>[^;]*;\s*$/.test(lines[k])) break;
+          if ((started && depth === 0) || (!started && /=>[^;]*;\s*$/.test(lines[k]))) break;
         }
         if (
-          !/\b(Assert|Should|Verify|Throws|ThrowsAsync|Expect|Received|MustHaveHappened|Matches|Snapshot|Equal|True|False)\b/.test(
+          !/\b(Assert\w*|Should\w*|Verify\w*|Throws\w*|Expect\w*|Received|MustHaveHappened|Matches|Snapshot|Equal|True|False)\b/.test(
             body,
           )
         )

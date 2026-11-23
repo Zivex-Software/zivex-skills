@@ -124,6 +124,21 @@ for (const p of projects.filter((x) => x.role === "contracts")) {
     );
 }
 
+const underAny = (ns, names) => names.some((n) => ns === n || ns.startsWith(`${n}.`));
+const sharedNames = projects.filter((p) => p.role === "shared").map((p) => p.name);
+const implNames = new Map(
+  modules.map((m) => [
+    m,
+    projects.filter((p) => p.module === m && p.role === "impl").map((p) => p.name),
+  ]),
+);
+const contractNames = new Map(
+  modules.map((m) => [
+    m,
+    projects.filter((p) => p.module === m && p.role === "contracts").map((p) => p.name),
+  ]),
+);
+
 // Source scan: InternalsVisibleTo to another module, and using directives into another module's namespaces.
 const ivtFinding = (p, name, file, line) => {
   const t = projects.find((x) => x.name === name);
@@ -150,16 +165,23 @@ for (const file of walkFiles(root)) {
     // using X.Y; / global using X.Y; / using static X.Y; / using Alias = X.Y.Z;
     const use = /^\s*(?:global\s+)?using\s+(?:static\s+)?(?:\w+\s*=\s*)?([\w.]+)\s*;/.exec(line);
     if (use && p.role !== "contracts") {
-      const seg = use[1].split(".");
-      if (VENDOR_ROOTS.has(seg[0])) return;
-      const other = modules.find((m) => m !== p.module && seg.slice(0, 3).includes(m));
-      if (other && !seg.includes("Contracts"))
+      const ns = use[1];
+      if (VENDOR_ROOTS.has(ns.split(".")[0]) || underAny(ns, sharedNames)) return;
+      // The namespace follows the project name (the .NET default): a using that starts with another module's implementation project
+      // name, and not with one of its Contracts project names, reaches into that module.
+      const other = modules.find(
+        (m) =>
+          m !== p.module &&
+          underAny(ns, implNames.get(m) ?? []) &&
+          !underAny(ns, contractNames.get(m) ?? []),
+      );
+      if (other)
         add(
           "BND006",
           "medium",
           rel(file),
           i + 1,
-          `using ${use[1]} reaches into module ${other} outside its Contracts namespace`,
+          `using ${ns} reaches into module ${other} outside its Contracts namespace`,
           `Use ${other}.Contracts types only.`,
         );
     }

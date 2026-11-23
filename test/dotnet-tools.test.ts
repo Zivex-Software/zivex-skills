@@ -408,6 +408,69 @@ describe("check-tests", () => {
   });
 });
 
+describe("pilot regressions: TFM and RES009", () => {
+  test("TFM comes from Directory.Build.props; RES009 ignores services resolved inside a created scope", async () => {
+    const dir = await tempDir();
+    await write(dir, {
+      "Directory.Build.props":
+        "<Project><PropertyGroup><TargetFramework>net10.0</TargetFramework></PropertyGroup></Project>\n",
+      "src/App/App.csproj": '<Project Sdk="Microsoft.NET.Sdk"></Project>\n',
+      "src/App/W.cs": `public class W : BackgroundService
+{
+    protected override async Task ExecuteAsync(CancellationToken t)
+    {
+        using var scope = factory.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+    }
+}
+`,
+    });
+    const info = json(
+      run("dotnet-conventions-bootstrap", "inspect-repo.mjs", dir, dir, "--json"),
+    ) as {
+      targetFrameworks: string[];
+    };
+    expect(info.targetFrameworks).toEqual(["net10.0"]);
+    const f = json(run("aspnet-resilience", "check-resilience.mjs", dir, dir, "--json")) as {
+      id: string;
+    }[];
+    expect(f.filter((x) => x.id === "RES009")).toEqual([]);
+  });
+});
+
+describe("TST009 regression", () => {
+  test("lambdas and helper assertions inside a test body count as assertions", async () => {
+    const dir = await tempDir();
+    await write(dir, {
+      "tests/A.Tests/A.Tests.csproj": '<Project Sdk="Microsoft.NET.Sdk"></Project>\n',
+      "tests/A.Tests/RuleTests.cs": `public class RuleTests
+{
+    [Fact]
+    public void Looped()
+    {
+        var refs = items.Where(x => x.Bad).ToList();
+        foreach (var r in refs)
+        {
+            Assert.DoesNotContain(r, refs);
+        }
+    }
+
+    [Fact]
+    public void Helper()
+    {
+        var o = Build();
+        AssertValid(o);
+    }
+}
+`,
+    });
+    const f = json(run("dotnet-testing", "check-tests.mjs", dir, dir, "--json")) as {
+      id: string;
+    }[];
+    expect(f.filter((x) => x.id === "TST009")).toEqual([]);
+  });
+});
+
 describe("module-context --find", () => {
   test("groups hits by module, names the module that defines the type, and handles routes and unknown terms", async () => {
     const dir = await tempDir();
@@ -562,5 +625,62 @@ describe("security audit: ownership-check candidates", () => {
     );
     expect(r.ownership.map((o: { file: string }) => o.file)).toEqual(["Open.cs"]);
     expect(r.ownership[0].line).toBe(3);
+  });
+});
+
+describe("security audit: route groups and in-code checks", () => {
+  const audit = (dir: string) =>
+    JSON.parse(
+      spawnSync(
+        process.execPath,
+        [script("aspnet-security-audit", "audit.mjs"), dir, "--json", "--no-packages"],
+        { encoding: "utf8" },
+      ).stdout,
+    );
+  const byRoute = (r: { endpoints: { route: string; auth: string }[] }) =>
+    Object.fromEntries(r.endpoints.map((e) => [e.route, e.auth]));
+
+  test("a group policy covers its endpoints, nested groups inherit it, and an unresolved group is 'unknown', not 'NONE'", async () => {
+    const dir = await tempDir();
+    await write(dir, {
+      "Program.cs": `var app = WebApplication.CreateBuilder(args).Build();
+var secured = app.MapGroup("/api").RequireAuthorization();
+var orders = secured.MapGroup("/orders").WithTags("Orders");
+orders.MapGet("/list", () => 1);
+var pub = app.MapGroup("/public").AllowAnonymous();
+pub.MapGet("/ping", () => 1);
+var plain = app.MapGroup("/plain");
+plain.MapGet("/x", () => 1);
+app.MapGet("/direct", () => 1);
+`,
+      "Module.cs": `static class M { public static void Map(IEndpointRouteBuilder api) { api.MapGet("/handed-in", () => 1); } }\n`,
+      "UseCase.cs":
+        "class U { async Task Run(IStaffAccess access) { await access.EnsureAsync(Capabilities.OrdersRead); } }\n",
+    });
+    const r = audit(dir);
+    const e = byRoute(r);
+    expect(e["GET /list"]).toBe("authorized (group)");
+    expect(e["GET /ping"]).toBe("anonymous (explicit, group)");
+    expect(e["GET /x"]).toBe("NONE");
+    expect(e["GET /direct"]).toBe("NONE");
+    expect(e["GET /handed-in"]).toBe("unknown (group set elsewhere)");
+    expect(r.inCodeChecks).toBe(1);
+  });
+
+  test("custom Require* policies and a fallback policy are recognised", async () => {
+    const dir = await tempDir();
+    await write(dir, {
+      "Program.cs": `var b = WebApplication.CreateBuilder(args);
+b.Services.AddAuthorizationBuilder().SetFallbackPolicy(p);
+var app = b.Build();
+app.MapGet("/a", () => 1).RequireModule("Orders");
+app.MapGet("/b", () => 1).RequirePermission("orders.read");
+app.MapGet("/c", () => 1);
+`,
+    });
+    const e = byRoute(audit(dir));
+    expect(e["GET /a"]).toBe("authorized");
+    expect(e["GET /b"]).toBe("authorized");
+    expect(e["GET /c"]).toBe("fallback policy");
   });
 });
