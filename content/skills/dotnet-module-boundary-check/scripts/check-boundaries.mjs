@@ -17,12 +17,34 @@ const SKIP_DIRS = new Set([
 const ROLE_SUFFIX =
   /\.(Contracts|Tests|UnitTests|IntegrationTests|Infrastructure|Domain|Application|Api|Endpoints|Migrations)$/i;
 const SHARED_NAME = /(^|\.)(Shared|SharedKernel|BuildingBlocks|Common|Kernel)(\.|$)/i;
+// Composition roots reference every module's implementation by design, so they belong to no module.
+const HOST_NAME = /(^|\.)(Host|WebHost|AppHost|Bootstrapper)(\.|$)/i;
+// Vendor/framework namespace roots: never a module, even when a module shares a segment name (Microsoft.AspNetCore.Identity vs module Identity).
+const VENDOR_ROOTS = new Set([
+  "System",
+  "Microsoft",
+  "Azure",
+  "Amazon",
+  "Google",
+  "Newtonsoft",
+  "Serilog",
+  "MassTransit",
+  "MediatR",
+  "FluentValidation",
+  "Xunit",
+  "NUnit",
+  "Moq",
+  "NSubstitute",
+  "Dapper",
+  "Polly",
+  "OpenTelemetry",
+]);
 const posix = (p) => p.split("\\").join("/");
 
 function* walkFiles(dir, depth = 0) {
   for (const e of readdirSync(dir, { withFileTypes: true })) {
     if (e.isDirectory()) {
-      if (!SKIP_DIRS.has(e.name) && depth < 8) yield* walkFiles(join(dir, e.name), depth + 1);
+      if (!SKIP_DIRS.has(e.name) && depth < 24) yield* walkFiles(join(dir, e.name), depth + 1);
     } else yield join(dir, e.name);
   }
 }
@@ -31,7 +53,8 @@ function readProjects(root) {
   const projects = [];
   for (const file of walkFiles(root)) {
     if (!file.endsWith(".csproj")) continue;
-    const text = readFileSync(file, "utf8");
+    // XML comments are ignored: a commented-out reference is not a reference.
+    const text = readFileSync(file, "utf8").replace(/<!--[\s\S]*?-->/g, " ");
     const all = (re) => [...text.matchAll(re)].map((m) => m[1]);
     const name = basename(file, ".csproj");
     projects.push({
@@ -39,13 +62,24 @@ function readProjects(root) {
       file,
       dir: dirname(file),
       rel: posix(relative(root, file)),
-      refs: all(/<ProjectReference\s[^>]*?Include\s*=\s*"([^"]+)"/gi).map((r) =>
-        resolve(dirname(file), r.split("\\").join("/")),
-      ),
-      packages: all(/<PackageReference\s[^>]*?Include\s*=\s*"([^"]+)"/gi),
+      refs: all(/<ProjectReference\s[^>]*?Include\s*=\s*["']([^"']+)["']/gi)
+        .map((r) =>
+          r.replace(
+            /\$\((MSBuildThisFileDirectory|MSBuildProjectDirectory)\)[\\/]?/i,
+            `${dirname(file)}/`,
+          ),
+        )
+        .filter((r) => !r.includes("$("))
+        .map((r) => resolve(dirname(file), r.split("\\").join("/"))),
+      packages: all(/<PackageReference\s[^>]*?Include\s*=\s*["']([^"']+)["']/gi),
       frameworks: all(/<FrameworkReference\s[^>]*?Include\s*=\s*"([^"]+)"/gi),
-      ivt: all(/<InternalsVisibleTo\s[^>]*?Include\s*=\s*"([^"]+)"/gi),
-      tfms: (/<TargetFrameworks?>([^<]+)</i.exec(text)?.[1] ?? "").split(";").filter(Boolean),
+      ivt: all(/<InternalsVisibleTo\s[^>]*?Include\s*=\s*["']([^"']+)["']/gi).map((n) =>
+        n.split(",")[0].trim(),
+      ),
+      tfms: (/<TargetFrameworks?>([^<]+)</i.exec(text)?.[1] ?? "")
+        .split(";")
+        .map((t) => t.trim())
+        .filter(Boolean),
       isTest:
         /<IsTestProject>\s*true/i.test(text) ||
         /Microsoft\.NET\.Test\.Sdk/.test(text) ||
@@ -62,26 +96,47 @@ function detectModules(projects, root) {
   } catch {
     // no config: use conventions
   }
-  const bases = projects.map((p) => p.name.replace(ROLE_SUFFIX, ""));
+  const stripRoles = (name) => {
+    let base = name;
+    for (let m = ROLE_SUFFIX.exec(base); m; m = ROLE_SUFFIX.exec(base))
+      base = base.slice(0, m.index);
+    return base || name;
+  };
+  const bases = projects.map((p) => stripRoles(p.name));
   const multi = bases.filter((b) => b.includes("."));
   const first = multi.map((b) => b.split(".")[0]);
   const top = [...new Set(first)]
     .map((s) => [s, first.filter((x) => x === s).length])
     .sort((a, b) => b[1] - a[1])[0];
   const prefix = top && multi.length >= 3 && top[1] / bases.length >= 0.8 ? `${top[0]}.` : "";
+  // Path-boundary prefix match; the longest matching prefix wins (so "src/Orders" does not swallow "src/Orders2").
+  const under = (rel, x) => {
+    const base = x.replace(/\/+$/, "");
+    return rel === base || rel.startsWith(`${base}/`);
+  };
+  const configured = (rel) => {
+    const hits = [
+      ...Object.entries(config.modules ?? {}).flatMap(([module, paths]) =>
+        paths.filter((x) => under(rel, x)).map((x) => ({ module, len: x.length })),
+      ),
+      ...(config.shared ?? [])
+        .filter((x) => under(rel, x))
+        .map((x) => ({ module: null, len: x.length })),
+    ].sort((a, b) => b.len - a.len);
+    return hits[0];
+  };
 
   for (const [i, p] of projects.entries()) {
     const contracts = /\.Contracts$/i.test(p.name);
     p.role = p.isTest ? "test" : contracts ? "contracts" : "impl";
     let module;
-    const confHit = Object.entries(config.modules ?? {}).find(([, paths]) =>
-      paths.some((x) => p.rel.startsWith(x)),
-    );
+    const hit = configured(p.rel);
     const m = /(?:^|\/)[Mm]odules\/([^/]+)\//.exec(`/${p.rel}`);
-    if (confHit) module = confHit[0];
-    else if ((config.shared ?? []).some((x) => p.rel.startsWith(x))) module = null;
+    if (hit) module = hit.module;
     else if (m) module = m[1];
-    else if (SHARED_NAME.test(bases[i])) module = null;
+    else if (SHARED_NAME.test(bases[i]) || HOST_NAME.test(bases[i])) module = null;
+    // Acme.Api / Acme.Web: nothing left after the company prefix, so it is the host, not a module named "Acme".
+    else if (prefix && bases[i] === prefix.slice(0, -1)) module = null;
     else module = prefix && bases[i].startsWith(prefix) ? bases[i].slice(prefix.length) : bases[i];
     p.module = module;
     if (module === null) p.role = "shared";
@@ -104,8 +159,13 @@ function tryRead(path) {
   }
 }
 
+// Blank out /* ... */ comments but keep the newlines, so line numbers stay right.
+const stripBlockComments = (text) =>
+  text.replace(/\/\*[\s\S]*?\*\//g, (m) => m.replace(/[^\n]/g, " "));
+
 const args = process.argv.slice(2);
 const root = resolve(args.find((a) => !a.startsWith("--")) ?? process.cwd());
+const json = args.includes("--json");
 const projects = readProjects(root);
 const byPath = byFile(projects);
 const modules = moduleNames(projects);
@@ -115,9 +175,11 @@ const rel = (p) => posix(relative(root, p));
 const SHARED_OK = (p) => p.role === "shared";
 
 if (modules.length < 2) {
-  console.log(
-    `${modules.length} module(s) detected (${modules.join(", ") || "none"}): nothing to check across modules. Add modules.json to describe modules explicitly.`,
-  );
+  if (json) console.log(JSON.stringify({ modules, findings: [] }, null, 2));
+  else
+    console.log(
+      `${modules.length} module(s) detected (${modules.join(", ") || "none"}): nothing to check across modules. Add modules.json to describe modules explicitly.`,
+    );
   process.exit(0);
 }
 
@@ -152,28 +214,46 @@ for (const p of projects) {
   }
 }
 
-// BND003: cycles between modules (even through contracts, they make modules inseparable).
-const seen = new Set();
-const visit = (node, path) => {
-  if (path.includes(node)) {
-    const cycle = path.slice(path.indexOf(node));
-    const key = [...cycle].sort().join(">");
-    if (!seen.has(key)) {
-      seen.add(key);
-      add(
-        "BND003",
-        "medium",
-        ".",
-        1,
-        `Module dependency cycle: ${[...cycle, node].join(" -> ")}`,
-        "Break the cycle: invert one dependency with an integration event, or move shared concepts into a contract both can use.",
-      );
+// BND003: cycles between modules (even through contracts they make modules inseparable).
+// Tarjan's strongly connected components: linear time, one finding per group of modules that depend on each other.
+{
+  let counter = 0;
+  const index = new Map();
+  const low = new Map();
+  const onStack = new Set();
+  const stack = [];
+  const strong = (v) => {
+    index.set(v, counter);
+    low.set(v, counter++);
+    stack.push(v);
+    onStack.add(v);
+    for (const w of edges.get(v) ?? []) {
+      if (!index.has(w)) {
+        strong(w);
+        low.set(v, Math.min(low.get(v), low.get(w)));
+      } else if (onStack.has(w)) low.set(v, Math.min(low.get(v), index.get(w)));
     }
-    return;
-  }
-  for (const next of edges.get(node) ?? []) visit(next, [...path, node]);
-};
-for (const m of edges.keys()) visit(m, []);
+    if (low.get(v) === index.get(v)) {
+      const group = [];
+      let w;
+      do {
+        w = stack.pop();
+        onStack.delete(w);
+        group.push(w);
+      } while (w !== v);
+      if (group.length > 1)
+        add(
+          "BND003",
+          "medium",
+          ".",
+          1,
+          `Modules depend on each other in a cycle: ${group.sort().join(" <-> ")}`,
+          "Break the cycle: invert one dependency with an integration event, or move the shared concept into a contract both can use.",
+        );
+    }
+  };
+  for (const v of [...edges.keys()].sort()) if (!index.has(v)) strong(v);
+}
 
 // BND005: contracts must stay free of implementation and framework-heavy dependencies.
 for (const p of projects.filter((x) => x.role === "contracts")) {
@@ -206,29 +286,33 @@ for (const p of projects.filter((x) => x.role === "contracts")) {
 }
 
 // Source scan: InternalsVisibleTo to another module, and using directives into another module's namespaces.
+const ivtFinding = (p, name, file, line) => {
+  const t = projects.find((x) => x.name === name);
+  if (t && t.module && p.module && t.module !== p.module && t.role !== "test")
+    add(
+      "BND004",
+      "high",
+      file,
+      line,
+      `InternalsVisibleTo grants ${t.name} (module ${t.module}) access to ${p.module} internals`,
+      "Remove it; expose what the other module needs through the contract.",
+    );
+};
 for (const file of walkFiles(root)) {
   if (!file.endsWith(".cs")) continue;
   const p = projectOf(projects, file);
   if (!p || p.role === "test" || p.role === "shared" || !p.module) continue;
-  const text = tryRead(file) ?? "";
+  const text = stripBlockComments(tryRead(file) ?? "");
   text.split("\n").forEach((line, i) => {
     if (line.trimStart().startsWith("//")) return;
-    const ivt = /InternalsVisibleTo\(\s*"([^"]+)"/.exec(line);
-    if (ivt) {
-      const t = projects.find((x) => x.name === ivt[1]);
-      if (t && t.module && t.module !== p.module && t.role !== "test")
-        add(
-          "BND004",
-          "high",
-          rel(file),
-          i + 1,
-          `InternalsVisibleTo grants ${t.name} (module ${t.module}) access to ${p.module} internals`,
-          "Remove it; expose what the other module needs through the contract.",
-        );
-    }
-    const use = /^\s*using\s+(?:static\s+)?([\w.]+)\s*;/.exec(line);
+    // [assembly: InternalsVisibleTo("Billing")], with a public key ("Billing, PublicKey=...") or a named argument (assemblyName: "Billing")
+    const ivt = /InternalsVisibleTo\(\s*(?:assemblyName\s*:\s*)?"([^",]+)/.exec(line);
+    if (ivt) ivtFinding(p, ivt[1].trim(), rel(file), i + 1);
+    // using X.Y; / global using X.Y; / using static X.Y; / using Alias = X.Y.Z;
+    const use = /^\s*(?:global\s+)?using\s+(?:static\s+)?(?:\w+\s*=\s*)?([\w.]+)\s*;/.exec(line);
     if (use && p.role !== "contracts") {
       const seg = use[1].split(".");
+      if (VENDOR_ROOTS.has(seg[0])) return;
       const other = modules.find((m) => m !== p.module && seg.slice(0, 3).includes(m));
       if (other && !seg.includes("Contracts"))
         add(
@@ -242,20 +326,7 @@ for (const file of walkFiles(root)) {
     }
   });
 }
-for (const p of projects) {
-  for (const name of p.ivt) {
-    const t = projects.find((x) => x.name === name);
-    if (t && t.module && p.module && t.module !== p.module && t.role !== "test")
-      add(
-        "BND004",
-        "high",
-        p.rel,
-        1,
-        `InternalsVisibleTo grants ${t.name} (module ${t.module}) access to ${p.module} internals`,
-        "Remove it; expose what the other module needs through the contract.",
-      );
-  }
-}
+for (const p of projects) for (const name of p.ivt) ivtFinding(p, name, p.rel, 1);
 
 // BND008: each module should explain itself to agents and humans.
 for (const m of modules) {
@@ -279,7 +350,7 @@ const order = { high: 0, medium: 1, low: 2 };
 unique.sort(
   (a, b) => order[a.level] - order[b.level] || a.file.localeCompare(b.file) || a.line - b.line,
 );
-if (args.includes("--json")) console.log(JSON.stringify({ modules, findings: unique }, null, 2));
+if (json) console.log(JSON.stringify({ modules, findings: unique }, null, 2));
 else {
   for (const f of unique)
     console.log(

@@ -5,7 +5,7 @@
 - **BREAKING**: a public type or member present in the base but gone or changed in the working tree (including interface members, record parameters, enum values).
 - **ADDITIVE**: new public members/types.
 
-It is a text heuristic: it cannot see the things below. Review them by hand.
+It is a text parser, not a compiler: it reads types, members (also multi-line and with attributes), records, delegates, enums and constants, ignores comments and string contents, and prefixes members with their namespace. Known limits: it does not resolve `using` aliases or `global using`, expands no `partial` types across files beyond reading each file, does not understand `#if` branches (both are read), and cannot see the things below. Review them by hand.
 
 ## Breaking even though signatures look the same
 

@@ -38,14 +38,22 @@ if (template) {
   }
   const t = mine[0].module;
   copiedProjects = mine.map((x) => x.rel.split(t).join(name));
-  // Copy each project folder; if the module sits in its own folder (e.g. Modules/Orders/), copy that folder instead.
-  const moduleDir = /(?:^|\/)[Mm]odules\/([^/]+)\//.exec(`/${mine[0].rel}`)
-    ? resolve(mine[0].dir, "..")
-    : undefined;
-  const dirs =
-    moduleDir && mine.every((p) => p.dir.startsWith(moduleDir))
-      ? [moduleDir]
-      : [...new Set(mine.map((p) => p.dir))];
+  // Copy the module's own folder when it has one (Modules/<Name>/), otherwise each project folder that is not nested inside another.
+  const segs = mine[0].rel.split("/");
+  const k = segs.findIndex((x) => /^modules$/i.test(x));
+  const moduleRel = k >= 0 && segs.length > k + 2 ? segs.slice(0, k + 2).join("/") : undefined;
+  let dirs;
+  if (moduleRel && mine.every((x) => x.rel.startsWith(`${moduleRel}/`)))
+    dirs = [resolve(repo, moduleRel)];
+  else {
+    const all = [...new Set(mine.map((x) => x.dir))];
+    dirs = all.filter(
+      (d) =>
+        !all.some(
+          (o) => o !== d && d.startsWith(`${o}${process.platform === "win32" ? "\\" : "/"}`),
+        ),
+    );
+  }
   for (const d of dirs)
     copies.push({ from: d, to: resolve(repo, rel(d).split(t).join(name)), template: t });
 } else {
@@ -121,6 +129,14 @@ if (apply) {
   }
   for (const c of copies) {
     cpSync(c.from, c.to, { recursive: true, filter: (s) => !SKIP_DIRS.has(basename(s)) });
+    // Names appear as PascalCase (types, namespaces, files), kebab-case (route/tag strings) and lowercase (routes): rename all three.
+    const kebab = (x) => x.replace(/([a-z0-9])([A-Z])/g, "$1-$2").toLowerCase();
+    const renameText = (text) => {
+      let out = text.split(c.template).join(name);
+      if (kebab(c.template).includes("-"))
+        out = out.replace(new RegExp(`\\b${kebab(c.template)}\\b`, "g"), kebab(name));
+      return out.replace(new RegExp(`\\b${c.template.toLowerCase()}\\b`, "g"), name.toLowerCase());
+    };
     const rename = (d) => {
       for (const e of readdirSync(d, { withFileTypes: true })) {
         let path = join(d, e.name);
@@ -132,7 +148,7 @@ if (apply) {
         }
         if (e.isDirectory()) rename(path);
         else if (/\.(cs|csproj|md|json|ya?ml)$/.test(path))
-          writeFileSync(path, readFileSync(path, "utf8").split(c.template).join(name));
+          writeFileSync(path, renameText(readFileSync(path, "utf8")));
       }
     };
     rename(c.to);

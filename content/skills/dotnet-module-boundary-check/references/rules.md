@@ -45,6 +45,9 @@ Agents and newcomers cannot learn the module's purpose, contract or rules.
 - **Config coupling**: one module reading another's configuration section.
 - **Semantic coupling**: a consumer depending on undocumented behaviour of a contract (ordering, timing, side effects).
 - **Shared projects**: a "Common" project that has become a back door for domain types.
+- **Deep or aliased namespaces**: `BND006` only looks at the first three namespace segments (`Acme.Billing.Domain`); a module name deeper in the namespace (`Acme.Platform.Modules.Billing.Domain`) is not caught.
+- **Unusual project wiring**: `InternalsVisibleTo` declared through an `<AssemblyAttribute>` item, and `ProjectReference`s added by `Directory.Build.props`/`.targets`, are not read; references using MSBuild properties other than `$(MSBuildThisFileDirectory)` / `$(MSBuildProjectDirectory)` are skipped.
+- **Host projects**: projects named `*.Host`, `*.WebHost`, `*.AppHost`, `*.Bootstrapper` (and a project that is only the company prefix, e.g. `Acme.Api`) are treated as the composition root and exempt; describe other layouts in `modules.json`.
 
 ## Severity and policy
 

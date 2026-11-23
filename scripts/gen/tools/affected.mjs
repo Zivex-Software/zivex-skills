@@ -17,13 +17,30 @@ try {
   process.exit(2);
 }
 const changed = new Set();
-for (const l of git(["status", "--porcelain", "-uall"], top).split("\n")) {
-  const f = l.slice(3).trim().replace(/^"|"$/g, "").split(" -> ").pop();
-  if (f && /\.(cs|csproj|props|targets)$/.test(f)) changed.add(resolve(top, f));
+const wanted = /\.(cs|csproj|props|targets)$/;
+try {
+  // -z: NUL-separated, unquoted paths (spaces and unicode are safe); a rename is followed by its old path.
+  const parts = git(["status", "--porcelain", "-z", "-uall"], top).split("\0");
+  for (let i = 0; i < parts.length; i++) {
+    const entry = parts[i];
+    if (entry.length < 4) continue;
+    if (/^[RC]/.test(entry)) i++; // skip the original path of a rename/copy
+    const f = entry.slice(3);
+    if (wanted.test(f)) changed.add(resolve(top, f));
+  }
+  if (base)
+    for (const f of git(["diff", "--name-only", "-z", `${base}...HEAD`], top).split("\0"))
+      if (wanted.test(f)) changed.add(resolve(top, f));
+} catch (e) {
+  console.error(
+    `git failed${base ? ` (is "${base}" a valid ref with a merge base? shallow clones need more history)` : ""}: ${
+      String(e.stderr ?? e.message)
+        .trim()
+        .split("\n")[0]
+    }`,
+  );
+  process.exit(2);
 }
-if (base)
-  for (const f of git(["diff", "--name-only", `${base}...HEAD`], top).split("\n"))
-    if (/\.(cs|csproj|props|targets)$/.test(f)) changed.add(resolve(top, f));
 
 const projects = readProjects(top);
 const touched = new Map();
@@ -34,15 +51,26 @@ for (const f of changed) {
 const global = [...changed].some((f) => /Directory\.(Build|Packages)\.(props|targets)$/.test(f));
 const buildSet = global ? projects.filter((p) => p.role !== "test") : [...touched.values()];
 const stem = (p) => p.name;
-const refs = (t) => new Set(t.refs);
+// Every project a project depends on, directly or transitively.
+const closure = (p, seen = new Set()) => {
+  for (const r of p.refs) {
+    const t = byPath.get(r);
+    if (t && !seen.has(t.file)) {
+      seen.add(t.file);
+      closure(t, seen);
+    }
+  }
+  return seen;
+};
+const byPath = byFile(projects);
+const buildFiles = new Set(buildSet.filter((p) => p.role !== "test").map((p) => p.file));
 const tests = projects.filter(
   (t) =>
     t.role === "test" &&
     (touched.has(t.file) ||
       global ||
-      buildSet.some(
-        (p) => p.role !== "test" && (t.name.startsWith(`${stem(p)}.`) || refs(t).has(p.file)),
-      )),
+      [...closure(t)].some((f) => buildFiles.has(f)) ||
+      buildSet.some((p) => p.role !== "test" && t.name.startsWith(`${stem(p)}.`))),
 );
 const modules = [...new Set([...touched.values()].map((p) => p.module).filter(Boolean))].sort();
 const rel = (p) => posix(relative(top, p.file));

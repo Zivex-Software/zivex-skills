@@ -20,12 +20,15 @@ const SKIP_DIRS = new Set([
 const ROLE_SUFFIX =
   /\.(Contracts|Tests|UnitTests|IntegrationTests|Infrastructure|Domain|Application|Api|Endpoints|Migrations)$/i;
 const SHARED_NAME = /(^|\.)(Shared|SharedKernel|BuildingBlocks|Common|Kernel)(\.|$)/i;
+// Composition roots reference every module's implementation by design, so they belong to no module.
+const HOST_NAME = /(^|\.)(Host|WebHost|AppHost|Bootstrapper)(\.|$)/i;
+// Vendor/framework namespace roots: never a module, even when a module shares a segment name (Microsoft.AspNetCore.Identity vs module Identity).
 const posix = (p) => p.split("\\").join("/");
 
 function* walkFiles(dir, depth = 0) {
   for (const e of readdirSync(dir, { withFileTypes: true })) {
     if (e.isDirectory()) {
-      if (!SKIP_DIRS.has(e.name) && depth < 8) yield* walkFiles(join(dir, e.name), depth + 1);
+      if (!SKIP_DIRS.has(e.name) && depth < 24) yield* walkFiles(join(dir, e.name), depth + 1);
     } else yield join(dir, e.name);
   }
 }
@@ -34,7 +37,8 @@ function readProjects(root) {
   const projects = [];
   for (const file of walkFiles(root)) {
     if (!file.endsWith(".csproj")) continue;
-    const text = readFileSync(file, "utf8");
+    // XML comments are ignored: a commented-out reference is not a reference.
+    const text = readFileSync(file, "utf8").replace(/<!--[\s\S]*?-->/g, " ");
     const all = (re) => [...text.matchAll(re)].map((m) => m[1]);
     const name = basename(file, ".csproj");
     projects.push({
@@ -42,13 +46,24 @@ function readProjects(root) {
       file,
       dir: dirname(file),
       rel: posix(relative(root, file)),
-      refs: all(/<ProjectReference\s[^>]*?Include\s*=\s*"([^"]+)"/gi).map((r) =>
-        resolve(dirname(file), r.split("\\").join("/")),
-      ),
-      packages: all(/<PackageReference\s[^>]*?Include\s*=\s*"([^"]+)"/gi),
+      refs: all(/<ProjectReference\s[^>]*?Include\s*=\s*["']([^"']+)["']/gi)
+        .map((r) =>
+          r.replace(
+            /\$\((MSBuildThisFileDirectory|MSBuildProjectDirectory)\)[\\/]?/i,
+            `${dirname(file)}/`,
+          ),
+        )
+        .filter((r) => !r.includes("$("))
+        .map((r) => resolve(dirname(file), r.split("\\").join("/"))),
+      packages: all(/<PackageReference\s[^>]*?Include\s*=\s*["']([^"']+)["']/gi),
       frameworks: all(/<FrameworkReference\s[^>]*?Include\s*=\s*"([^"]+)"/gi),
-      ivt: all(/<InternalsVisibleTo\s[^>]*?Include\s*=\s*"([^"]+)"/gi),
-      tfms: (/<TargetFrameworks?>([^<]+)</i.exec(text)?.[1] ?? "").split(";").filter(Boolean),
+      ivt: all(/<InternalsVisibleTo\s[^>]*?Include\s*=\s*["']([^"']+)["']/gi).map((n) =>
+        n.split(",")[0].trim(),
+      ),
+      tfms: (/<TargetFrameworks?>([^<]+)</i.exec(text)?.[1] ?? "")
+        .split(";")
+        .map((t) => t.trim())
+        .filter(Boolean),
       isTest:
         /<IsTestProject>\s*true/i.test(text) ||
         /Microsoft\.NET\.Test\.Sdk/.test(text) ||
@@ -65,26 +80,47 @@ function detectModules(projects, root) {
   } catch {
     // no config: use conventions
   }
-  const bases = projects.map((p) => p.name.replace(ROLE_SUFFIX, ""));
+  const stripRoles = (name) => {
+    let base = name;
+    for (let m = ROLE_SUFFIX.exec(base); m; m = ROLE_SUFFIX.exec(base))
+      base = base.slice(0, m.index);
+    return base || name;
+  };
+  const bases = projects.map((p) => stripRoles(p.name));
   const multi = bases.filter((b) => b.includes("."));
   const first = multi.map((b) => b.split(".")[0]);
   const top = [...new Set(first)]
     .map((s) => [s, first.filter((x) => x === s).length])
     .sort((a, b) => b[1] - a[1])[0];
   const prefix = top && multi.length >= 3 && top[1] / bases.length >= 0.8 ? `${top[0]}.` : "";
+  // Path-boundary prefix match; the longest matching prefix wins (so "src/Orders" does not swallow "src/Orders2").
+  const under = (rel, x) => {
+    const base = x.replace(/\/+$/, "");
+    return rel === base || rel.startsWith(`${base}/`);
+  };
+  const configured = (rel) => {
+    const hits = [
+      ...Object.entries(config.modules ?? {}).flatMap(([module, paths]) =>
+        paths.filter((x) => under(rel, x)).map((x) => ({ module, len: x.length })),
+      ),
+      ...(config.shared ?? [])
+        .filter((x) => under(rel, x))
+        .map((x) => ({ module: null, len: x.length })),
+    ].sort((a, b) => b.len - a.len);
+    return hits[0];
+  };
 
   for (const [i, p] of projects.entries()) {
     const contracts = /\.Contracts$/i.test(p.name);
     p.role = p.isTest ? "test" : contracts ? "contracts" : "impl";
     let module;
-    const confHit = Object.entries(config.modules ?? {}).find(([, paths]) =>
-      paths.some((x) => p.rel.startsWith(x)),
-    );
+    const hit = configured(p.rel);
     const m = /(?:^|\/)[Mm]odules\/([^/]+)\//.exec(`/${p.rel}`);
-    if (confHit) module = confHit[0];
-    else if ((config.shared ?? []).some((x) => p.rel.startsWith(x))) module = null;
+    if (hit) module = hit.module;
     else if (m) module = m[1];
-    else if (SHARED_NAME.test(bases[i])) module = null;
+    else if (SHARED_NAME.test(bases[i]) || HOST_NAME.test(bases[i])) module = null;
+    // Acme.Api / Acme.Web: nothing left after the company prefix, so it is the host, not a module named "Acme".
+    else if (prefix && bases[i] === prefix.slice(0, -1)) module = null;
     else module = prefix && bases[i].startsWith(prefix) ? bases[i].slice(prefix.length) : bases[i];
     p.module = module;
     if (module === null) p.role = "shared";
@@ -128,14 +164,22 @@ if (template) {
   }
   const t = mine[0].module;
   copiedProjects = mine.map((x) => x.rel.split(t).join(name));
-  // Copy each project folder; if the module sits in its own folder (e.g. Modules/Orders/), copy that folder instead.
-  const moduleDir = /(?:^|\/)[Mm]odules\/([^/]+)\//.exec(`/${mine[0].rel}`)
-    ? resolve(mine[0].dir, "..")
-    : undefined;
-  const dirs =
-    moduleDir && mine.every((p) => p.dir.startsWith(moduleDir))
-      ? [moduleDir]
-      : [...new Set(mine.map((p) => p.dir))];
+  // Copy the module's own folder when it has one (Modules/<Name>/), otherwise each project folder that is not nested inside another.
+  const segs = mine[0].rel.split("/");
+  const k = segs.findIndex((x) => /^modules$/i.test(x));
+  const moduleRel = k >= 0 && segs.length > k + 2 ? segs.slice(0, k + 2).join("/") : undefined;
+  let dirs;
+  if (moduleRel && mine.every((x) => x.rel.startsWith(`${moduleRel}/`)))
+    dirs = [resolve(repo, moduleRel)];
+  else {
+    const all = [...new Set(mine.map((x) => x.dir))];
+    dirs = all.filter(
+      (d) =>
+        !all.some(
+          (o) => o !== d && d.startsWith(`${o}${process.platform === "win32" ? "\\" : "/"}`),
+        ),
+    );
+  }
   for (const d of dirs)
     copies.push({ from: d, to: resolve(repo, rel(d).split(t).join(name)), template: t });
 } else {
@@ -211,6 +255,14 @@ if (apply) {
   }
   for (const c of copies) {
     cpSync(c.from, c.to, { recursive: true, filter: (s) => !SKIP_DIRS.has(basename(s)) });
+    // Names appear as PascalCase (types, namespaces, files), kebab-case (route/tag strings) and lowercase (routes): rename all three.
+    const kebab = (x) => x.replace(/([a-z0-9])([A-Z])/g, "$1-$2").toLowerCase();
+    const renameText = (text) => {
+      let out = text.split(c.template).join(name);
+      if (kebab(c.template).includes("-"))
+        out = out.replace(new RegExp(`\\b${kebab(c.template)}\\b`, "g"), kebab(name));
+      return out.replace(new RegExp(`\\b${c.template.toLowerCase()}\\b`, "g"), name.toLowerCase());
+    };
     const rename = (d) => {
       for (const e of readdirSync(d, { withFileTypes: true })) {
         let path = join(d, e.name);
@@ -222,7 +274,7 @@ if (apply) {
         }
         if (e.isDirectory()) rename(path);
         else if (/\.(cs|csproj|md|json|ya?ml)$/.test(path))
-          writeFileSync(path, readFileSync(path, "utf8").split(c.template).join(name));
+          writeFileSync(path, renameText(readFileSync(path, "utf8")));
       }
     };
     rename(c.to);

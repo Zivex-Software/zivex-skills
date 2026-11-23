@@ -4,6 +4,7 @@
 //@@MODULES@@
 const args = process.argv.slice(2);
 const root = resolve(args.find((a) => !a.startsWith("--")) ?? process.cwd());
+const json = args.includes("--json");
 const projects = readProjects(root);
 const byPath = byFile(projects);
 const modules = moduleNames(projects);
@@ -13,9 +14,11 @@ const rel = (p) => posix(relative(root, p));
 const SHARED_OK = (p) => p.role === "shared";
 
 if (modules.length < 2) {
-  console.log(
-    `${modules.length} module(s) detected (${modules.join(", ") || "none"}): nothing to check across modules. Add modules.json to describe modules explicitly.`,
-  );
+  if (json) console.log(JSON.stringify({ modules, findings: [] }, null, 2));
+  else
+    console.log(
+      `${modules.length} module(s) detected (${modules.join(", ") || "none"}): nothing to check across modules. Add modules.json to describe modules explicitly.`,
+    );
   process.exit(0);
 }
 
@@ -50,28 +53,46 @@ for (const p of projects) {
   }
 }
 
-// BND003: cycles between modules (even through contracts, they make modules inseparable).
-const seen = new Set();
-const visit = (node, path) => {
-  if (path.includes(node)) {
-    const cycle = path.slice(path.indexOf(node));
-    const key = [...cycle].sort().join(">");
-    if (!seen.has(key)) {
-      seen.add(key);
-      add(
-        "BND003",
-        "medium",
-        ".",
-        1,
-        `Module dependency cycle: ${[...cycle, node].join(" -> ")}`,
-        "Break the cycle: invert one dependency with an integration event, or move shared concepts into a contract both can use.",
-      );
+// BND003: cycles between modules (even through contracts they make modules inseparable).
+// Tarjan's strongly connected components: linear time, one finding per group of modules that depend on each other.
+{
+  let counter = 0;
+  const index = new Map();
+  const low = new Map();
+  const onStack = new Set();
+  const stack = [];
+  const strong = (v) => {
+    index.set(v, counter);
+    low.set(v, counter++);
+    stack.push(v);
+    onStack.add(v);
+    for (const w of edges.get(v) ?? []) {
+      if (!index.has(w)) {
+        strong(w);
+        low.set(v, Math.min(low.get(v), low.get(w)));
+      } else if (onStack.has(w)) low.set(v, Math.min(low.get(v), index.get(w)));
     }
-    return;
-  }
-  for (const next of edges.get(node) ?? []) visit(next, [...path, node]);
-};
-for (const m of edges.keys()) visit(m, []);
+    if (low.get(v) === index.get(v)) {
+      const group = [];
+      let w;
+      do {
+        w = stack.pop();
+        onStack.delete(w);
+        group.push(w);
+      } while (w !== v);
+      if (group.length > 1)
+        add(
+          "BND003",
+          "medium",
+          ".",
+          1,
+          `Modules depend on each other in a cycle: ${group.sort().join(" <-> ")}`,
+          "Break the cycle: invert one dependency with an integration event, or move the shared concept into a contract both can use.",
+        );
+    }
+  };
+  for (const v of [...edges.keys()].sort()) if (!index.has(v)) strong(v);
+}
 
 // BND005: contracts must stay free of implementation and framework-heavy dependencies.
 for (const p of projects.filter((x) => x.role === "contracts")) {
@@ -104,29 +125,33 @@ for (const p of projects.filter((x) => x.role === "contracts")) {
 }
 
 // Source scan: InternalsVisibleTo to another module, and using directives into another module's namespaces.
+const ivtFinding = (p, name, file, line) => {
+  const t = projects.find((x) => x.name === name);
+  if (t && t.module && p.module && t.module !== p.module && t.role !== "test")
+    add(
+      "BND004",
+      "high",
+      file,
+      line,
+      `InternalsVisibleTo grants ${t.name} (module ${t.module}) access to ${p.module} internals`,
+      "Remove it; expose what the other module needs through the contract.",
+    );
+};
 for (const file of walkFiles(root)) {
   if (!file.endsWith(".cs")) continue;
   const p = projectOf(projects, file);
   if (!p || p.role === "test" || p.role === "shared" || !p.module) continue;
-  const text = tryRead(file) ?? "";
+  const text = stripBlockComments(tryRead(file) ?? "");
   text.split("\n").forEach((line, i) => {
     if (line.trimStart().startsWith("//")) return;
-    const ivt = /InternalsVisibleTo\(\s*"([^"]+)"/.exec(line);
-    if (ivt) {
-      const t = projects.find((x) => x.name === ivt[1]);
-      if (t && t.module && t.module !== p.module && t.role !== "test")
-        add(
-          "BND004",
-          "high",
-          rel(file),
-          i + 1,
-          `InternalsVisibleTo grants ${t.name} (module ${t.module}) access to ${p.module} internals`,
-          "Remove it; expose what the other module needs through the contract.",
-        );
-    }
-    const use = /^\s*using\s+(?:static\s+)?([\w.]+)\s*;/.exec(line);
+    // [assembly: InternalsVisibleTo("Billing")], with a public key ("Billing, PublicKey=...") or a named argument (assemblyName: "Billing")
+    const ivt = /InternalsVisibleTo\(\s*(?:assemblyName\s*:\s*)?"([^",]+)/.exec(line);
+    if (ivt) ivtFinding(p, ivt[1].trim(), rel(file), i + 1);
+    // using X.Y; / global using X.Y; / using static X.Y; / using Alias = X.Y.Z;
+    const use = /^\s*(?:global\s+)?using\s+(?:static\s+)?(?:\w+\s*=\s*)?([\w.]+)\s*;/.exec(line);
     if (use && p.role !== "contracts") {
       const seg = use[1].split(".");
+      if (VENDOR_ROOTS.has(seg[0])) return;
       const other = modules.find((m) => m !== p.module && seg.slice(0, 3).includes(m));
       if (other && !seg.includes("Contracts"))
         add(
@@ -140,20 +165,7 @@ for (const file of walkFiles(root)) {
     }
   });
 }
-for (const p of projects) {
-  for (const name of p.ivt) {
-    const t = projects.find((x) => x.name === name);
-    if (t && t.module && p.module && t.module !== p.module && t.role !== "test")
-      add(
-        "BND004",
-        "high",
-        p.rel,
-        1,
-        `InternalsVisibleTo grants ${t.name} (module ${t.module}) access to ${p.module} internals`,
-        "Remove it; expose what the other module needs through the contract.",
-      );
-  }
-}
+for (const p of projects) for (const name of p.ivt) ivtFinding(p, name, p.rel, 1);
 
 // BND008: each module should explain itself to agents and humans.
 for (const m of modules) {
@@ -177,7 +189,7 @@ const order = { high: 0, medium: 1, low: 2 };
 unique.sort(
   (a, b) => order[a.level] - order[b.level] || a.file.localeCompare(b.file) || a.line - b.line,
 );
-if (args.includes("--json")) console.log(JSON.stringify({ modules, findings: unique }, null, 2));
+if (json) console.log(JSON.stringify({ modules, findings: unique }, null, 2));
 else {
   for (const f of unique)
     console.log(

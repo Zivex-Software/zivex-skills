@@ -1,5 +1,7 @@
 // Compares the public surface of a module's .Contracts project with a git ref and classifies the change:
-// removed or changed public members are BREAKING, new ones are ADDITIVE. Heuristic text parser (types, members, record parameters, enum values).
+// removed or changed public members are BREAKING, new ones are ADDITIVE.
+// A text parser, not Roslyn: it reads types, members (also multi-line and with attributes), records, delegates, enums and constants,
+// ignores comments, strings and preprocessor lines, and prefixes members with their namespace. It cannot see semantics or nullability context.
 // Usage: node contract-diff.mjs <module name | path to the Contracts folder> [--base <ref, default HEAD>] [--json] [--strict]
 import { execFileSync } from "node:child_process";
 //@@MODULES@@
@@ -9,99 +11,211 @@ const base = bi >= 0 ? args[bi + 1] : "HEAD";
 const target = args.find((a, i) => !a.startsWith("--") && args[i - 1] !== "--base");
 const cwd = resolve(process.cwd());
 const git = (a) =>
-  execFileSync("git", a, { cwd, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
-if (!target) {
-  console.error("Usage: contract-diff.mjs <module name | contracts folder> [--base <ref>]");
+  execFileSync("git", a, {
+    cwd,
+    encoding: "utf8",
+    stdio: ["ignore", "pipe", "pipe"],
+    maxBuffer: 64 << 20,
+  });
+const fail = (message) => {
+  console.error(message);
   process.exit(2);
+};
+if (!target) fail("Usage: contract-diff.mjs <module name | contracts folder> [--base <ref>]");
+let top;
+try {
+  top = resolve(git(["rev-parse", "--show-toplevel"]).trim());
+} catch {
+  fail("Not inside a git repository: contract-diff compares against a git ref.");
 }
-const top = resolve(git(["rev-parse", "--show-toplevel"]).trim());
 
 let dir = resolve(cwd, target);
 if (!existsSync(dir)) {
-  const projects = readProjects(top);
-  const c = projects.find(
+  const c = readProjects(top).find(
     (p) => p.role === "contracts" && p.module?.toLowerCase() === target.toLowerCase(),
   );
-  if (!c) {
-    console.error(`No Contracts project found for "${target}".`);
-    process.exit(2);
-  }
+  if (!c) fail(`No Contracts project found for "${target}".`);
   dir = c.dir;
 }
 if (dir.endsWith(".csproj")) dir = dirname(dir);
 const relDir = posix(relative(top, dir));
 
-// Signature extraction: tracks type nesting with brace depth; only public types and their public (or interface) members count.
-function signatures(source) {
-  const clean = source
-    .replace(/\/\*[\s\S]*?\*\//g, "")
+// ---- signature extraction ----
+const OPEN = "\u0001";
+const CLOSE = "\u0002";
+const SEMI = "\u0003";
+const TYPE =
+  /^((?:(?:public|internal|private|protected|sealed|static|abstract|partial|readonly|unsafe|new|file|ref)\s+)*)(class|interface|struct|enum|record(?:\s+(?:class|struct))?)\s+(\w+)/;
+
+function sanitize(source) {
+  // One pass: drop comments, protect { } ; inside string/char literals so they cannot confuse the structure scan.
+  const text = source
+    .replace(/\r\n?/g, "\n")
+    .replace(
+      /\/\*[\s\S]*?\*\/|\/\/[^\n]*|@"(?:[^"]|"")*"|"(?:[^"\\\n]|\\.)*"|'(?:[^'\\\n]|\\.)*'/g,
+      (m) => {
+        if (m.startsWith("/")) return " ";
+        return m.replaceAll("{", OPEN).replaceAll("}", CLOSE).replaceAll(";", SEMI);
+      },
+    );
+  return text
     .split("\n")
-    .map((l) => l.replace(/\/\/.*$/, ""));
-  const out = new Set();
-  const stack = [];
+    .filter((l) => !l.trimStart().startsWith("#"))
+    .join("\n");
+}
+const dropAttributes = (s) => {
+  let out = s.trim();
+  while (out.startsWith("[")) {
+    let depth = 0;
+    let end = -1;
+    for (let i = 0; i < out.length; i++) {
+      if (out[i] === "[") depth++;
+      if (out[i] === "]" && --depth === 0) {
+        end = i;
+        break;
+      }
+    }
+    if (end < 0) break;
+    out = out.slice(end + 1).trim();
+  }
+  return out;
+};
+const restore = (s) => s.replaceAll(OPEN, "{").replaceAll(CLOSE, "}").replaceAll(SEMI, ";");
+const norm = (s) =>
+  restore(s)
+    .replace(/\s+/g, " ")
+    .replace(/([(<[])\s+/g, "$1")
+    .replace(/\s+([)>\],])/g, "$1")
+    .trim();
+// Default parameter values are not part of the surface: `int a = 0, string b = ""` -> `int a, string b`.
+const stripDefaults = (s) =>
+  s.replace(/\s*=\s*(?:[^,()<>=]|\((?:[^()]|\([^()]*\))*\)|<[^<>]*>)+(?=\s*[,)])/g, "");
+const matching = (text, open) => {
   let depth = 0;
-  const norm = (s) =>
-    s
-      .replace(/\s+/g, " ")
-      .replace(/([(<[])\s+/g, "$1")
-      .replace(/\s+([)>\],])/g, "$1")
-      .trim();
-  const TYPE =
-    /^\s*(?:(public|internal|private|protected)\s+)?(?:(?:sealed|static|abstract|partial|readonly|unsafe|new)\s+)*(class|interface|struct|enum|record(?:\s+(?:class|struct))?)\s+(\w+)/;
-  for (const line of clean) {
-    if (/^\s*\[.*\]\s*$/.test(line) || !line.trim()) continue;
-    const t = TYPE.exec(line);
-    const top = stack[stack.length - 1];
+  for (let i = open; i < text.length; i++) {
+    if (text[i] === "{") depth++;
+    else if (text[i] === "}" && --depth === 0) return i;
+  }
+  return text.length - 1;
+};
+
+function signatures(source) {
+  const out = new Set();
+  const text = sanitize(source);
+  const scopes = []; // { kind: "ns" | "type", name, typeKind, public }
+  let buf = "";
+  const path = () => scopes.map((s) => s.name).join(".");
+  const surface = () => scopes.filter((s) => s.kind === "type").every((s) => s.public);
+  const inType = () => scopes.length > 0 && scopes[scopes.length - 1].kind === "type";
+  const memberVisible = (header) => {
+    const t = scopes[scopes.length - 1];
+    if (!t || t.kind !== "type" || !surface()) return false;
+    if (t.typeKind === "interface") return !/\b(private|internal)\b/.test(header);
+    return /\b(public|protected)\b/.test(header);
+  };
+  const add = (owner, signature) => out.add(`${owner}: ${norm(signature)}`);
+
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i];
+    if (ch !== "{" && ch !== "}" && ch !== ";") {
+      buf += ch;
+      continue;
+    }
+    const header = dropAttributes(buf);
+    buf = "";
+
+    if (ch === "}") {
+      scopes.pop();
+      continue;
+    }
+
+    if (ch === ";") {
+      if (!header || header.startsWith("=") || /^(global\s+)?using\b|^extern\b/.test(header))
+        continue;
+      const ns = /^namespace\s+([\w.]+)$/.exec(header);
+      if (ns) {
+        scopes.push({ kind: "ns", name: ns[1] });
+        continue;
+      }
+      const t = TYPE.exec(header);
+      if (t && t[2].startsWith("record")) {
+        // record R(...);  no body
+        const parentOk = surface(); // every enclosing type is public (namespaces do not matter)
+        const isPublic =
+          /\b(public|protected)\b/.test(t[1]) ||
+          (inType() &&
+            scopes[scopes.length - 1].typeKind === "interface" &&
+            !/\b(private|internal)\b/.test(t[1]));
+        if (parentOk && isPublic)
+          add(`${path()}.${t[3]}`.replace(/^\./, ""), stripDefaults(header));
+        continue;
+      }
+      const isDelegate = /\bdelegate\b/.test(header);
+      if (isDelegate) {
+        if (/\bpublic\b/.test(header) && surface())
+          add(path() || "(global)", stripDefaults(header));
+        continue;
+      }
+      if (inType() && memberVisible(header)) {
+        const expr = header.includes("=>") ? header.split("=>")[0] : header;
+        const isConst = /\bconst\b/.test(expr);
+        add(
+          path(),
+          isConst
+            ? expr
+            : stripDefaults(expr.replace(/\s=\s[^=>][\s\S]*$/, "")) +
+                (expr.includes("(") ? ";" : ";"),
+        );
+      }
+      continue;
+    }
+
+    // ch === "{": a type, a namespace, or a member with a body / accessors
+    const ns = /^namespace\s+([\w.]+)$/.exec(header);
+    if (ns) {
+      scopes.push({ kind: "ns", name: ns[1] });
+      continue;
+    }
+    const t = TYPE.exec(header);
     if (t) {
-      const isPublic = t[1] === "public" || (top?.kind === "interface" && !t[1] && top.public);
-      const path = [...stack.map((s) => s.name), t[3]].join(".");
-      const parentPublic = !top || top.public;
-      const entry = {
-        name: t[3],
-        kind: t[2].split(" ")[0],
-        public: isPublic && parentPublic,
-        depth: null,
-      };
-      if (entry.public) out.add(`${path}: ${norm(line.replace(/\{.*$/, ""))}`);
-      // Small enums are often written on one line: `enum Status { Open = 1, Closed = 2 }`.
-      if (entry.public && entry.kind === "enum" && line.includes("{") && line.includes("}")) {
-        for (const part of line.slice(line.indexOf("{") + 1, line.lastIndexOf("}")).split(",")) {
-          const m = /^\s*(\w+)(?:\s*=\s*(.+?))?\s*$/.exec(part);
-          if (m) out.add(`${path}: value ${m[1]}${m[2] ? ` ${m[2].trim()}` : ""}`);
+      const parentOk = surface(); // every enclosing type is public (namespaces do not matter)
+      const parent = scopes[scopes.length - 1];
+      const isPublic =
+        /\b(public|protected)\b/.test(t[1]) ||
+        (inType() && parent.typeKind === "interface" && !/\b(private|internal)\b/.test(t[1]));
+      const name = t[3];
+      const typeKind = t[2].split(/\s+/)[0];
+      const owner = `${path()}.${name}`.replace(/^\./, "");
+      if (parentOk && isPublic) add(owner, stripDefaults(header));
+      if (typeKind === "enum") {
+        const end = matching(text, i);
+        if (parentOk && isPublic) {
+          for (const part of text.slice(i + 1, end).split(",")) {
+            const m = /^\s*(?:\[[^\]]*\]\s*)*(\w+)(?:\s*=\s*([^,]+?))?\s*$/.exec(part);
+            if (m) out.add(`${owner}: value ${m[1]}${m[2] ? ` ${norm(m[2])}` : ""}`);
+          }
         }
+        i = end;
+        continue;
       }
-      stack.push(entry);
-    } else if (top?.public && top.depth !== null && depth === top.depth) {
-      const text = line.trim();
-      if (top.kind === "enum") {
-        const v = /^(\w+)/.exec(text);
-        if (v)
-          out.add(
-            `${stack.map((s) => s.name).join(".")}: value ${v[1]}${/=\s*[^,]+/.exec(text) ? ` ${/=\s*([^,]+)/.exec(text)[1].trim()}` : ""}`,
-          );
-      } else if (
-        top.kind === "interface"
-          ? /[;)]\s*$|\{\s*(get|set|init)/.test(text)
-          : /^(public|protected)\b/.test(text)
-      ) {
-        let sig = text.includes("=>") ? text.split("=>")[0] : text;
-        if (!/\{\s*(get|set|init)/.test(sig)) sig = sig.replace(/\{.*$/, "");
-        sig = sig.replace(/\s=\s[^=>].*;$/, ";");
-        out.add(`${stack.map((s) => s.name).join(".")}: ${norm(sig)}`);
-      }
+      scopes.push({ kind: "type", name, typeKind, public: parentOk && isPublic });
+      continue;
     }
-    for (const ch of line) {
-      if (ch === "{") {
-        depth++;
-        const pending = stack.find((s) => s.depth === null);
-        if (pending) pending.depth = depth;
-      } else if (ch === "}") {
-        if (stack.length && stack[stack.length - 1].depth === depth) stack.pop();
-        depth--;
-      }
+    // member with a body: property accessors or a method/constructor/operator body (skipped)
+    const end = matching(text, i);
+    const body = text.slice(i + 1, end);
+    i = end;
+    if (!inType() || !memberVisible(header)) {
+      // a property initializer (`{ get; set; } = 5;`) leaves "= 5" in buf: discarded at the next ";"
+      continue;
     }
-    // a type declared with a primary constructor and ";" (record X(...);) opens no body
-    if (t && /;\s*$/.test(line) && !/\{/.test(line)) stack.pop();
+    if (!header.includes("(") && /\b(get|set|init)\b/.test(body)) {
+      const flat = body.replace(/\{[^{}]*\}/g, ";").replace(/\{[^{}]*\}/g, ";");
+      const accessors = [
+        ...flat.matchAll(/((?:(?:public|private|protected|internal)\s+)*)(get|set|init)\b/g),
+      ].map((m) => `${m[1].trim() ? `${m[1].trim()} ` : ""}${m[2]};`);
+      add(path(), `${header} { ${accessors.join(" ")} }`);
+    } else add(path(), `${stripDefaults(header)}`);
   }
   return out;
 }
@@ -112,10 +226,15 @@ for (const f of walkFiles(dir))
 const before = new Set();
 let listing = "";
 try {
-  listing = git(["ls-tree", "-r", "--name-only", base, "--", relDir]);
+  listing = git(["ls-tree", "-r", "--name-only", "--full-tree", base, "--", relDir]);
 } catch (e) {
-  console.error(`Cannot read ${base}: ${String(e.stderr ?? e.message).trim()}`);
-  process.exit(2);
+  fail(
+    `Cannot read ref "${base}": ${
+      String(e.stderr ?? e.message)
+        .trim()
+        .split("\n")[0]
+    }`,
+  );
 }
 for (const f of listing.split("\n").filter((x) => x.endsWith(".cs")))
   for (const s of signatures(git(["show", `${base}:${f}`]))) before.add(s);
@@ -123,12 +242,23 @@ for (const f of listing.split("\n").filter((x) => x.endsWith(".cs")))
 const removed = [...before].filter((s) => !current.has(s)).sort();
 const added = [...current].filter((s) => !before.has(s)).sort();
 const owner = (s) => s.split(": ")[0];
-const changed = removed.filter((s) => added.some((a) => owner(a) === owner(s)));
+// "Changed" = removed and added with the same owner and the same member name (a rename or a new signature of the same member).
+const memberName = (s) =>
+  /([\w]+)\s*(?:\(|\{|;|$)/.exec(
+    s
+      .slice(s.indexOf(": ") + 2)
+      .replace(/\(.*$/s, "(")
+      .replace(/<[^>]*>/g, ""),
+  )?.[1];
+const changed = removed.filter((s) =>
+  added.some((a) => owner(a) === owner(s) && memberName(a) === memberName(s)),
+);
 const result = {
   base,
   contracts: relDir,
   breaking: removed,
   additive: added,
+  changed,
   note: "Removed or changed public members are breaking for consumers; added members are additive (except new members on interfaces that consumers implement, and new required constructor parameters).",
 };
 if (args.includes("--json")) console.log(JSON.stringify(result, null, 2));
