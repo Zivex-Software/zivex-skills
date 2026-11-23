@@ -25,6 +25,8 @@ export const packSchema = z.strictObject({
   agents: names,
   hooks: names,
   stacks: names,
+  /** Opt-in packs are never selected by default (no `--yes` default, no wizard pre-selection) and are never required by other packs. */
+  optIn: z.boolean().default(false),
 });
 export type Pack = z.infer<typeof packSchema>;
 

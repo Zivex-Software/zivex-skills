@@ -99,6 +99,39 @@ try {
     files(repo).filter((f) => !f.startsWith("src") && f !== "Sample.slnx"),
     [],
   );
+
+  // Opt-in packs: `init --yes` without --packs installs the defaults only; the Zivex pack needs an explicit `add`.
+  zs("init", "--yes", "--agents", "generic", "--scope", "project");
+  assert.ok(
+    existsSync(join(repo, ".agents/skills/aspnet-security/SKILL.md")),
+    "default packs are installed",
+  );
+  assert.ok(
+    !existsSync(join(repo, ".agents/skills/zivex-engineering-standards")),
+    "opt-in pack must not be a default",
+  );
+  zs("add", "zivex-conventions");
+  assert.ok(
+    existsSync(join(repo, ".agents/skills/zivex-engineering-standards/SKILL.md")),
+    "opt-in pack installs when asked for",
+  );
+  assert.ok(
+    existsSync(join(repo, ".agents/skills/zivex-vertical-slice/references/slice-anatomy.md")),
+  );
+  zs("remove", "zivex-conventions");
+  assert.ok(
+    !existsSync(join(repo, ".agents/skills/zivex-engineering-standards")),
+    "opt-in pack removes cleanly",
+  );
+  assert.ok(
+    existsSync(join(repo, ".agents/skills/aspnet-security/SKILL.md")),
+    "removing the opt-in pack keeps the rest",
+  );
+  zs("remove", "--all", "--project");
+  assert.deepEqual(
+    files(repo).filter((f) => !f.startsWith("src") && f !== "Sample.slnx"),
+    [],
+  );
   console.log(`smoke ok: ${pm}`);
 } finally {
   rmSync(work, { recursive: true, force: true });

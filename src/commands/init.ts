@@ -98,7 +98,7 @@ export async function run(o: CommonOpts) {
     const option = (x: (typeof available)[number]) => ({
       value: x.id,
       label: x.title,
-      hint: x.hint,
+      hint: x.optIn ? `${x.hint} (opt-in)` : x.hint,
     });
     p.note(msg.foundationNote);
     const stackIds = available.filter((x) => !x.id.startsWith("workflow-"));
@@ -107,7 +107,7 @@ export async function run(o: CommonOpts) {
         message: msg.askPacks,
         required: false,
         initialValues: available
-          .filter((x) => x.stacks.some((s) => s === "dotnet" && stack.dotnet))
+          .filter((x) => !x.optIn && x.stacks.some((s) => s === "dotnet" && stack.dotnet))
           .map((x) => x.id),
         options: {
           [msg.groupWorkflows]: available.filter((x) => x.id.startsWith("workflow-")).map(option),
@@ -116,7 +116,8 @@ export async function run(o: CommonOpts) {
       }),
     );
   } else {
-    packs = available.map((x) => x.id);
+    // Defaults never include opt-in packs: they must be asked for by name (--packs or the wizard).
+    packs = available.filter((x) => !x.optIn).map((x) => x.id);
   }
   if (env.content.packs.has("foundation"))
     packs = ["foundation", ...packs.filter((x) => x !== "foundation")];

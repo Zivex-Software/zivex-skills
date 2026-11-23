@@ -197,3 +197,36 @@ describe.skipIf(!hasDotnet)("dotnet-* tools against a real SDK", () => {
     expect(diff.additive.join()).toMatch(/GetAsync/);
   }, 300_000);
 });
+
+describe.skipIf(!hasDotnet)("documented examples compile", () => {
+  test("the zivex-vertical-slice golden example compiles against minimal project stubs", async () => {
+    const md = await readFile(
+      join(
+        defaultContentRoot(),
+        "skills",
+        "zivex-vertical-slice",
+        "references",
+        "slice-anatomy.md",
+      ),
+      "utf8",
+    );
+    const code = /## Golden example[\s\S]*?```csharp\n([\s\S]*?)```/.exec(md)?.[1];
+    expect(code, "golden example code block").toBeTruthy();
+    const dir = await tempDir();
+    const stubs = await readFile(
+      join(import.meta.dirname, "fixtures", "golden-example", "Stubs.cs"),
+      "utf8",
+    );
+    await write(dir, {
+      "Golden.csproj": `<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup><TargetFramework>net10.0</TargetFramework><Nullable>enable</Nullable><ImplicitUsings>enable</ImplicitUsings><TreatWarningsAsErrors>true</TreatWarningsAsErrors></PropertyGroup>
+  <ItemGroup><FrameworkReference Include="Microsoft.AspNetCore.App" /></ItemGroup>
+  <ItemGroup><PackageReference Include="Microsoft.EntityFrameworkCore" Version="10.*" /><PackageReference Include="Microsoft.Extensions.Caching.Hybrid" Version="10.*" /></ItemGroup>
+</Project>`,
+      "Stubs.cs": stubs,
+      "Example.cs": code!,
+    });
+    // execFileSync throws with the compiler output when the example does not build.
+    dotnet(["build", "--nologo", "-v", "q"], dir);
+  }, 300_000);
+});

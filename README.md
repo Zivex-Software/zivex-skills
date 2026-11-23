@@ -53,6 +53,30 @@ The eight `dotnet-*` skills run on any .NET repository (a repo without modules i
 
 Modules are found by convention (`Modules/<Name>/`, or the project name minus role suffix and company prefix) or described in a `modules.json` at the repo root. The scripts are tested against a real .NET SDK in CI.
 
+## Zivex conventions (opt-in)
+
+Six extra skills encode the **Zivex house style** for teams that want to code the Zivex way. They are an **opt-in pack**: nothing installs them unless you ask, and the other skills work without them. They are plain, generic conventions (no internal names), published under the same MIT licence.
+
+| Skill                              | What it covers                                                                                                  |
+| ---------------------------------- | --------------------------------------------------------------------------------------------------------------- |
+| `zivex-engineering-standards`      | strict-by-default tooling, the technology matrix, what needs an ADR, and 16 non-negotiable rules                |
+| `zivex-dotnet-code-style`          | how .NET code looks: layout, classes, endpoints, errors, events, EF Core, logging, comments, test style         |
+| `zivex-vertical-slice`             | the ASP.NET Core vertical-slice profile (FAST and STRICT), tenancy rules, a worked example, checklists, prompts |
+| `zivex-architecture-workflow`      | idea to build-ready architecture: intake, masterplan, ADRs, delivery readiness, one approval gate               |
+| `zivex-build-workflow`             | the vertical-slice build loop, definition of done per kind of work, hard stops, honest phase reports            |
+| `zivex-compliance-by-construction` | control to mechanism to test to evidence, a 30-control baseline, the evidence pack, a strict claims policy      |
+
+```sh
+npx zivex-skills add zivex-conventions            # CLI: adds the pack to what you already have
+npx zivex-skills init --packs zivex-conventions,workflow-features --agents claude-code --scope project
+```
+
+```text
+/plugin install zivex-conventions --marketplace Zivex-Software/zivex-skills     # Claude Code plugin (separate from zivex-skills)
+```
+
+`init --yes` and the wizard never select it by default (`optIn: true` in the pack), and no other pack requires it. When it is installed, these rules take precedence over the generic defaults where they differ (for example no generic repositories and no MediatR without an ADR); an existing repository's own conventions always win.
+
 ## Install
 
 ```sh
@@ -77,7 +101,7 @@ After installing, ask your agent to run `dotnet-conventions-bootstrap`. Teammate
 /plugin install zivex-skills --marketplace Zivex-Software/zivex-skills
 ```
 
-The plugin bundles all 15 skills, the `dotnet-reviewer` subagent, the three hooks (they do nothing outside .NET repositories) and the always-on foundation rules (injected at session start, because plugins cannot ship a `CLAUDE.md`). Skills appear as `zivex-skills:<skill>`. Use **either** the plugin **or** `npx zivex-skills init` for Claude Code, not both: both install the same hooks and rules. The CLI is the choice when you want per-pack selection, Cursor/Codex targets, project-committed files and `sync` for teammates.
+The plugin bundles the 15 core skills, the `dotnet-reviewer` subagent, the three hooks (they do nothing outside .NET repositories) and the always-on foundation rules (injected at session start, because plugins cannot ship a `CLAUDE.md`). Skills appear as `zivex-skills:<skill>`. The opt-in Zivex conventions are a second plugin (below). Use **either** the plugin **or** `npx zivex-skills init` for Claude Code, not both: both install the same hooks and rules. The CLI is the choice when you want per-pack selection, Cursor/Codex targets, project-committed files and `sync` for teammates.
 
 ## Scopes
 

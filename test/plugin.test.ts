@@ -21,7 +21,10 @@ describe("Claude Code plugin", () => {
       expect(existsSync(join(root, p)), p).toBe(true);
     }
     const market = await json(".claude-plugin/marketplace.json");
-    expect(market.plugins.map((p: { name: string }) => p.name)).toEqual([manifest.name]);
+    expect(market.plugins.map((p: { name: string }) => p.name)).toEqual([
+      manifest.name,
+      "zivex-conventions",
+    ]);
     expect(market.plugins[0].source).toBe("./");
   });
 
@@ -83,7 +86,11 @@ describe("Claude Code plugin", () => {
       });
       expect(r.status, r.stdout + r.stderr).toBe(0);
       const content = await loadContent();
-      for (const name of content.skills.keys()) expect(r.stdout).toContain(`zivex-skills:${name}`);
+      // The opt-in Zivex skills ship as their own plugin, not in this one.
+      for (const name of content.skills.keys()) {
+        if (name.startsWith("zivex-")) expect(r.stdout).not.toContain(`zivex-skills:${name}`);
+        else expect(r.stdout).toContain(`zivex-skills:${name}`);
+      }
       expect(r.stdout).toContain("agents: zivex-skills:dotnet-reviewer");
       expect(r.stdout).toMatch(/hooks: SessionStart/);
     },

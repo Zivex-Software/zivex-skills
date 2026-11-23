@@ -1,12 +1,21 @@
 {
   "name": "zivex",
-  "owner": { "name": "Zivex Software", "url": "https://github.com/Zivex-Software" },
+  "owner": {
+    "name": "Zivex Software",
+    "url": "https://github.com/Zivex-Software"
+  },
   "description": "Skills, hooks and subagents for .NET / ASP.NET Core modular monoliths",
   "plugins": [
     {
       "name": "zivex-skills",
       "source": "./",
       "description": "15 skills (ASP.NET security, performance, EF Core, API design, resilience, observability, module boundaries), a reviewer subagent, guard/format/verify hooks, always-on rules",
+      "category": "development"
+    },
+    {
+      "name": "zivex-conventions",
+      "source": "./plugins/zivex-conventions",
+      "description": "Zivex conventions: the Zivex house standards, .NET code style, vertical slices, workflows and compliance. Opt-in companion to zivex-skills; the skills work on their own.",
       "category": "development"
     }
   ]

@@ -1,0 +1,13 @@
+{
+  "name": "zivex-conventions",
+  "version": "0.1.0",
+  "description": "Zivex conventions: the Zivex house standards, .NET code style, vertical slices, workflows and compliance. Opt-in companion to zivex-skills; the skills work on their own.",
+  "author": {
+    "name": "Zivex Software",
+    "url": "https://github.com/Zivex-Software"
+  },
+  "homepage": "https://github.com/Zivex-Software/zivex-skills#readme",
+  "repository": "https://github.com/Zivex-Software/zivex-skills",
+  "license": "MIT",
+  "keywords": ["dotnet", "conventions", "code-style", "architecture", "compliance", "zivex"]
+}

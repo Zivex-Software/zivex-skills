@@ -1,0 +1,12 @@
+id: zivex-conventions
+title: Zivex conventions
+hint: the Zivex house standards, .NET code style, vertical slices, workflows and compliance
+requires: [dotnet-core]
+skills:
+  - zivex-engineering-standards
+  - zivex-dotnet-code-style
+  - zivex-vertical-slice
+  - zivex-architecture-workflow
+  - zivex-build-workflow
+  - zivex-compliance-by-construction
+optIn: true

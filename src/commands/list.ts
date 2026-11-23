@@ -6,14 +6,17 @@ import type { CommonOpts } from "./shared.js";
 export async function run(o: CommonOpts & { available?: boolean }) {
   const env = await createEnv();
   if (o.available) {
-    const packs = [...env.content.packs.values()].map(({ id, title, hint }) => ({
+    const packs = [...env.content.packs.values()].map(({ id, title, hint, optIn }) => ({
       id,
       title,
       hint,
+      optIn,
     }));
     if (o.json) return console.log(JSON.stringify(packs, null, 2));
     for (const x of packs)
-      console.log(`${x.id.padEnd(24)} ${x.title}${x.hint ? ` - ${x.hint}` : ""}`);
+      console.log(
+        `${x.id.padEnd(24)} ${x.title}${x.hint ? ` - ${x.hint}` : ""}${x.optIn ? " (opt-in)" : ""}`,
+      );
     return;
   }
   const sections = [
