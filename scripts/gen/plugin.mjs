@@ -93,7 +93,7 @@ for (const pack of optInPacks) {
     cpSync(join(root, "content", "skills", name), join(dir, "skills", name), { recursive: true });
   writeFileSync(
     join(dir, "README.md"),
-    `# ${pack.title}\n\n${description}\n\nGenerated from \`content/skills\` by \`npm run gen\` in https://github.com/Zivex-Software/zivex-skills (MIT). Do not edit here.\n`,
+    `# ${pack.title}\n\n${description}\n\n## Install\n\n\`\`\`\n/plugin install ${pack.id} --marketplace Zivex-Software/zivex-skills\n\`\`\`\n\nGenerated from \`content/skills\` by \`npm run gen\` in https://github.com/Zivex-Software/zivex-skills (MIT). Do not edit here.\n`,
   );
   cpSync(join(root, "LICENSE"), join(dir, "LICENSE"));
   marketplace.plugins.push({

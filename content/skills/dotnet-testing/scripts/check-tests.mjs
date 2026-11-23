@@ -26,7 +26,7 @@ const RULES = [
   },
   {
     id: "TST004",
-    level: "medium",
+    level: "low",
     re: /\bDateTime(Offset)?\.(Now|UtcNow|Today)\b/,
     msg: "Wall-clock time in a test",
     fix: "Inject TimeProvider (FakeTimeProvider from Microsoft.Extensions.TimeProvider.Testing) so results do not depend on when the test runs.",

@@ -44,7 +44,19 @@ const RULES = [
     id: "SEC006",
     level: "high",
     json: true,
-    re: /"[^"]*(Password|Pwd|Secret|ApiKey|Api_Key|PrivateKey|ClientSecret|AccessToken|Token)[^"]*"\s*:\s*"(?!\s*"|\$\{|<|\*+|CHANGE|REPLACE|your[-_ ])[^"]{6,}"/i,
+    // Development/Local/Test settings legitimately hold demo values; the production file must not.
+    fn: (text, rel) =>
+      /\.(Development|Local|Test|Testing)\.json$/i.test(rel)
+        ? []
+        : text
+            .split("\n")
+            .flatMap((l, i) =>
+              /"[^"]*(Password|Pwd|Secret|ApiKey|Api_Key|PrivateKey|ClientSecret|AccessToken|Token)[^"]*"\s*:\s*"(?!\s*"|\$\{|<|\*+|CHANGE|REPLACE|your[-_ ])[^"]{6,}"/i.test(
+                l,
+              )
+                ? [i + 1]
+                : [],
+            ),
     msg: "Possible secret committed in appsettings",
     fix: "Move it to user-secrets (dev), environment variables or a vault; commit an empty placeholder.",
   },
@@ -115,8 +127,23 @@ const RULES = [
   {
     id: "SEC016",
     level: "high",
-    re: /\bLog(Trace|Debug|Information|Warning|Error|Critical)\s*\([^;]*\b(password|passwd|secret|token|authorization|apikey)\b/i,
-    msg: "Log call mentions a secret-like value",
+    // Prose inside the message ("Password reset requested") is fine; flag the word only as an argument, interpolation or {Placeholder}.
+    fn: (text) =>
+      text.split("\n").flatMap((l, i) => {
+        const m = /\bLog(Trace|Debug|Information|Warning|Error|Critical)\s*\(/.exec(l);
+        if (
+          !m ||
+          l.trimStart().startsWith("//") ||
+          /\b(Redact|Mask|Hash|Sanitize)\w*\s*\(/i.test(l)
+        )
+          return [];
+        const rest = l.slice(m.index);
+        const code = rest.replace(/"(?:[^"\\]|\\.)*"/g, (str) =>
+          (str.match(/\{[^}]*\}/g) ?? []).join(" "),
+        );
+        return /\b(password|passwd|secret|token|authorization|apikey)\b/i.test(code) ? [i + 1] : [];
+      }),
+    msg: "Log call passes a secret-like value",
     fix: "Log identifiers, never credentials or tokens; redact before logging.",
   },
   {

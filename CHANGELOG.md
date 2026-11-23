@@ -26,3 +26,4 @@ First release (Phase 1).
 - Tooling: TypeScript 7.0.2.
 - Safety: backups before merging into user files, content hashes to detect local edits, idempotent installs, complete removal.
 - Tuned on real modular-monolith repositories: module detection (path mode, project-name boundaries, test-project assignment), BND006/BND003 precision, security-audit route-group inheritance and strong/weak ownership candidates, TST009 (lambdas and helper assertions), RES009 (scoped resolution), target frameworks from `Directory.Build.props`.
+- SEC016 flags secrets passed as log arguments or placeholders (not prose, not redacted values); SEC006 skips Development/Local/Test settings; TST004 is low severity; the opt-in plugin README carries its install line.

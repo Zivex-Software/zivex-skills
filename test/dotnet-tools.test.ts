@@ -438,6 +438,35 @@ describe("pilot regressions: TFM and RES009", () => {
   });
 });
 
+describe("pilot regressions: SEC016 and SEC006", () => {
+  test("SEC016 flags secrets passed to a log call, not prose; SEC006 skips Development settings", async () => {
+    const dir = await tempDir();
+    await write(dir, {
+      "src/App/App.csproj": '<Project Sdk="Microsoft.NET.Sdk"></Project>\n',
+      "src/App/L.cs": `class L {
+  void A() {
+    logger.LogInformation("Password reset requested for an unknown address.");
+    logger.LogError(ex, "Secret could not be read.");
+    logger.LogInformation("Got {Token}", token);
+    logger.LogWarning($"bad {password}");
+  }
+}
+`,
+      "src/App/appsettings.Development.json": '{ "DefaultPassword": "Demo!2345" }\n',
+      "src/App/appsettings.json": '{ "DefaultPassword": "Demo!2345" }\n',
+    });
+    const f = json(run("aspnet-security", "check-security.mjs", dir, dir, "--json")) as {
+      id: string;
+      file: string;
+      line: number;
+    }[];
+    expect(f.filter((x) => x.id === "SEC016").map((x) => x.line)).toEqual([5, 6]);
+    expect(f.filter((x) => x.id === "SEC006").map((x) => x.file)).toEqual([
+      "src/App/appsettings.json",
+    ]);
+  });
+});
+
 describe("TST009 regression", () => {
   test("lambdas and helper assertions inside a test body count as assertions", async () => {
     const dir = await tempDir();
