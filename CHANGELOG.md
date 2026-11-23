@@ -1,8 +1,10 @@
 # Changelog
 
-## 0.1.0
+## 0.2.0
 
-First release (Phase 1).
+Everything below the first-release list was added after 0.1.0: the deepened ASP.NET and dotnet skills, the opt-in `zivex-conventions` pack and plugin, the Claude Code plugin, and the fixes from running the tools on real repositories. See the entries below.
+
+## 0.1.0 (first release, Phase 1)
 
 - CLI: `init`, `add`, `remove`, `list`, `update`, `sync`, `doctor`; scopes `hybrid`, `project`, `global`; `--dry-run`, `--yes`, `--force`, `--pin`; non-interactive mode for CI and agents.
 - Targets: Claude Code (skills, subagents, hooks, rules), Cursor (rules, skills), Codex (AGENTS.md rules, skills, subagents), generic `.agents/skills`.

@@ -1,6 +1,6 @@
 {
   "name": "zivex-skills",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Skills, hooks and a reviewer subagent for .NET / ASP.NET Core modular monoliths: security, performance, EF Core, API design, resilience, observability, module boundaries.",
   "author": {
     "name": "Zivex Software",

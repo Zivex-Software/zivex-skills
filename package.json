@@ -1,6 +1,6 @@
 {
   "name": "zivex-skills",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Install AI-agent skills, rules, hooks and subagents for .NET modular-monolith development into Claude Code, Cursor and Codex.",
   "keywords": [
     "agent-skills",
