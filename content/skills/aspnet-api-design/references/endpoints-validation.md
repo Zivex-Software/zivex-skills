@@ -38,7 +38,7 @@ Microsoft recommends minimal APIs for new projects. Use controllers when the mod
 
 ## Validation
 
-- **.NET 10 minimal APIs**: `builder.Services.AddValidation();` validates query, header and body parameters using DataAnnotations; failures produce a 400 `ValidationProblem`. `.DisableValidation()` per endpoint. The source generator only discovers types in the **calling assembly**: types in other projects (e.g. `.Contracts`) need `[ValidatableType]` or the repo's validator (verify in the current docs). The APIs live in `Microsoft.Extensions.Validation`.
+- **.NET 10 minimal APIs**: `builder.Services.AddValidation();` validates query, header and body parameters using DataAnnotations; failures produce a 400 `ValidationProblem`. `.DisableValidation()` per endpoint. The source generator only discovers validatable types in the **assembly where `AddValidation` is called**, so call it in the assembly that defines the endpoints and their request types; request types that live in another project (for example a `.Contracts` project) are not discovered from the host, so validate those with the repo's validator. (`[ValidatableType]` is documented for the Blazor forms model; the minimal-API section does not mention it.) The APIs live in `Microsoft.Extensions.Validation`.
 - .NET 8/9 or richer rules: an endpoint filter calling the repo's validator (FluentValidation or similar) returning `Results.ValidationProblem(errors)`.
 - Validate **shape** (required, length, range, format) at the boundary; **business rules** (uniqueness, state transitions) in the handler/domain, mapped to 409/422.
 - Unknown JSON properties are ignored by default; set `JsonUnmappedMemberHandling.Disallow` for strict contracts.

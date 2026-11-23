@@ -8,7 +8,7 @@ Sources: learn.microsoft.com/aspnet/core/performance/rate-limit, /performance/ti
 - `QueueLimit = 0` means reject instead of queue; queues hold request threads/memory: keep them small.
 - Partition per user/API key (fallback IP); a global limiter via `options.GlobalLimiter = PartitionedRateLimiter.Create<HttpContext, string>(...)`; named policies via `RequireRateLimiting("name")`/`[EnableRateLimiting]`; `[DisableRateLimiting]` overrides.
 - Unbounded partition keys from user input can be abused for DoS; normalise and cap them.
-- Rejection: set `RejectionStatusCode` explicitly (429; the default is not stated in the docs read) and write `Retry-After` from `MetadataName.RetryAfter` in `OnRejected` (the fixed-window limiter reports it; the concurrency limiter does not on .NET 10).
+- Rejection: set `RejectionStatusCode` explicitly to 429 (the **default is 503 Service Unavailable**, per the `RateLimiterOptions` API reference; the guide only sets 429 in its examples) and write `Retry-After` from `MetadataName.RetryAfter` in `OnRejected` (the fixed-window limiter reports it; the concurrency limiter does not on .NET 10).
 - Counters are in memory **per instance**: with N replicas the effective limit is N x. Use a gateway/edge or distributed limiter for hard global limits.
 - Order: put cheap, early limits (per IP) before authentication, per-user limits after it; exclude health endpoints.
 
@@ -37,7 +37,7 @@ app.MapGet("/reports/{id}", GetReport).WithRequestTimeout("report");
 
 ## Kestrel limits (defence in depth)
 
-- Per-endpoint `[RequestSizeLimit]`, request header/body timeouts and minimum data rates protect against slow-loris style abuse; current default values were not stated in the docs read: check `KestrelServerLimits` for your version before changing anything. Keep `AllowSynchronousIO` false.
+- Per-endpoint `[RequestSizeLimit]`, request header/body timeouts and minimum data rates protect against slow-loris style abuse; defaults (`KestrelServerLimits` API reference): `RequestHeadersTimeout` 30 s, `KeepAliveTimeout` 130 s (the current API reference; an old 5.0 block of the options page still says 2 minutes), `MaxRequestHeadersTotalSize` 32 KB, `MaxRequestBodySize` 30,000,000 bytes, `MinRequestBodyDataRate` and `MinResponseDataRate` 240 bytes/s with a 5 s grace period. Change them only with a measured reason. Keep `AllowSynchronousIO` false.
 
 ## Testing
 

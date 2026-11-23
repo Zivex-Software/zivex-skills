@@ -5,7 +5,7 @@
 ```csharp
 public class OrdersApiFactory : WebApplicationFactory<Program>, IAsyncLifetime
 {
-    private readonly MsSqlContainer _db = new MsSqlBuilder().Build();   // Testcontainers.MsSql (package name: verify current version)
+    private readonly MsSqlContainer _db = new MsSqlBuilder().Build();   // package Testcontainers.MsSql, builder MsSqlBuilder, connection via GetConnectionString()
 
     public async Task InitializeAsync() => await _db.StartAsync();
     public new async Task DisposeAsync() => await _db.DisposeAsync();
@@ -23,6 +23,7 @@ public class OrdersApiFactory : WebApplicationFactory<Program>, IAsyncLifetime
 }
 ```
 
+- The Testcontainers docs show a shared **class fixture** (`IClassFixture`) around the container and also offer helper packages (`Testcontainers.XunitV3` for xUnit v3, `Testcontainers.Xunit` for v2); the `IAsyncLifetime` factory above is an equivalent hand-written version. PostgreSQL works the same way (`Testcontainers.PostgreSql`, `PostgreSqlBuilder`).
 - `Program` must be accessible to the test project. **.NET 10**: a source generator emits `public partial class Program` for top-level-statement apps (release notes), so no manual partial is needed; on .NET 8/9 add `public partial class Program { }`.
 - Override **only the edges** (database connection, clock, external HTTP clients, message bus). Keep the real pipeline: routing, filters, validation, auth, serialization, exception handler.
 - Share the factory per test class/collection (xUnit `IClassFixture`/`ICollectionFixture`): starting the host and a container per test is slow.
@@ -32,7 +33,7 @@ public class OrdersApiFactory : WebApplicationFactory<Program>, IAsyncLifetime
 
 - Use the same engine as production (Testcontainers for SQL Server/PostgreSQL, or a local database from the repo's compose file). SQLite in-memory is acceptable only when the repo targets it; the EF **InMemory provider is not**: it enforces no constraints or transactions.
 - Apply the real **migrations** to the test database (`Database.MigrateAsync()` is fine in tests): that also proves the migrations run.
-- **Isolation**, pick one and stay consistent: (a) a fresh database/schema per test class, (b) a shared database with data reset between tests (Respawn-style reset of tables, keeping seed/reference data), (c) a transaction rolled back per test (only if the code under test does not commit its own transactions). Never rely on test order.
+- **Isolation**, pick one and stay consistent: (a) a fresh database/schema per test class, (b) a shared database with data reset between tests (the `Respawn` package: `Respawner.CreateAsync(connection, options)` then `ResetAsync(...)` resets the tables and keeps what you exclude, such as seed data), (c) a transaction rolled back per test (only if the code under test does not commit its own transactions). Never rely on test order.
 - Tests that need Docker are tagged (`[Trait("Category","Integration")]`) so they can be run or skipped explicitly; document the requirement in the module's `AGENTS.md`.
 
 ## Authentication and authorization
@@ -53,7 +54,7 @@ public class OrdersApiFactory : WebApplicationFactory<Program>, IAsyncLifetime
 - Status code, `Content-Type`, and the **ProblemDetails** shape for errors (no stack traces/internal details leaked).
 - Persisted state (query the database afterwards through a new scope/context, not the one the request used).
 - Headers: `Location` on 201, caching/ETag where promised, `Retry-After` on 429.
-- Logs and metrics when they are part of the behaviour: fake `ILoggerProvider`, `MetricCollector<T>` from `Microsoft.Extensions.Diagnostics.Testing` (verify package version), `ActivityListener` for spans.
+- Logs and metrics when they are part of the behaviour: fake `ILoggerProvider`, `MetricCollector<T>` from `Microsoft.Extensions.Diagnostics.Testing` (the Learn API pages for it could not be reached when this was checked: confirm the package and version), `ActivityListener` for spans.
 
 ## Speed
 

@@ -31,12 +31,12 @@ Sources: learn.microsoft.com/aspnet/core/fundamentals/best-practices, /dotnet/co
 
 ## Pooling
 
-- `ObjectPool<T>` (Microsoft.Extensions.ObjectPool) for expensive reusable objects (verify package/API in current docs: the docs page could not be fetched in this pass). `DbContext` pooling: see `aspnet-data-efcore`.
+- `ObjectPool<T>` (namespace `Microsoft.Extensions.ObjectPool`) for expensive reusable objects: get a pool from `ObjectPoolProvider.Create(policy)` (register `DefaultObjectPoolProvider`), `Get()` and `Return()`. The pool limits how many objects it **retains**, not how many it allocates; with `DefaultObjectPoolProvider` and an `IDisposable` item, objects not returned are disposed; implement `IResettable` (or a custom policy) so objects are reset when returned (ASP.NET Core ObjectPool docs). `DbContext` pooling: see `aspnet-data-efcore`.
 - Pool only when allocation shows up in profiles; pooled objects must be reset and must not leak state across requests.
 
 ## GC and containers
 
-- Default is workstation GC unless the host chooses otherwise; **Server GC** (`System.GC.Server` / `<ServerGarbageCollection>`) raises throughput on multi-core servers but uses more memory and dedicated threads per core; with many small instances per machine workstation non-concurrent GC can cause less context switching. Whether ASP.NET Core defaults to Server GC for your host: verify (not stated in the docs read).
+- Default is workstation GC unless the host chooses otherwise; **Server GC** (`System.GC.Server` / `<ServerGarbageCollection>`) raises throughput on multi-core servers but uses more memory and dedicated threads per core; with many small instances per machine workstation non-concurrent GC can cause less context switching. The docs say the host determines the default for hosted apps and do not state what ASP.NET Core chooses, so check the effective setting (`System.Runtime.GCSettings.IsServerGC`) instead of assuming.
 - In containers the heap hard limit defaults to 75% of the container limit when unset (larger of 20 MB and that percentage): set container memory limits deliberately; leave headroom for native memory.
 - DATAS (dynamic adaptation) is on by default since .NET 9: `System.GC.DynamicAdaptationMode` controls it; measure before disabling.
 - `System.GC.ConserveMemory` (0-9), `RetainVM`, `HighMemoryPercent` exist; change only with data. Never call `GC.Collect()` in request paths.

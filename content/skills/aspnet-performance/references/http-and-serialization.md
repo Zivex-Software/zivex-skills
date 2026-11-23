@@ -5,7 +5,7 @@ Sources: learn.microsoft.com/aspnet/core/performance/{response-compression,timeo
 ## HttpClient
 
 - Register with `AddHttpClient<TClient>()` / named clients. Each `CreateClient()` returns a cheap `HttpClient`; the factory pools handlers (default handler lifetime **2 minutes**, `SetHandlerLifetime`).
-- Never `new HttpClient()` per request (port exhaustion, no pooling). A static/singleton `HttpClient` is fine **with** `SocketsHttpHandler.PooledConnectionLifetime` set (DNS refresh; the docs example is 2 minutes; the default value was not stated: set it).
+- Never `new HttpClient()` per request (port exhaustion, no pooling). A static/singleton `HttpClient` is fine **with** `SocketsHttpHandler.PooledConnectionLifetime` set (DNS refresh; the **default is `InfiniteTimeSpan`**, so connections are never recycled; the docs example uses 2 minutes). `PooledConnectionIdleTimeout` defaults to 1 minute in .NET 6 and later.
 - **Typed clients are transient**: don't inject them into singletons (stale handler). In singletons use `IHttpClientFactory` or a `SocketsHttpHandler`-based client.
 - Cookies: avoid `IHttpClientFactory` (pooled handlers share `CookieContainer`s) unless you disable cookies.
 - Add timeouts and resilience: see `aspnet-resilience`.
@@ -19,7 +19,7 @@ Sources: learn.microsoft.com/aspnet/core/performance/{response-compression,timeo
 ## Protocols and Kestrel
 
 - HTTP/3 is opt-in (`Http1AndHttp2AndHttp3` + HTTPS; keep HTTP/1.1 and 2 for proxies that lack HTTP/3). It needs MsQuic; Kestrel falls back when unavailable.
-- Kestrel `AllowSynchronousIO` is false (keep it). HTTP/2 defaults: 100 streams/connection, 16 KB frames. Connection/timeouts/data-rate defaults were not stated in the current docs read: check `KestrelServerLimits` for your version before tuning. Prefer per-endpoint body limits (`[RequestSizeLimit]`) over global changes.
+- Kestrel `AllowSynchronousIO` is false (keep it). HTTP/2 defaults: 100 streams/connection, 16 KB frames. Other defaults (`KestrelServerLimits` API reference): request headers timeout 30 s, keep-alive timeout 130 s, headers 32 KB, request body 30,000,000 bytes (about 28.6 MB), minimum data rate 240 bytes/s with a 5 s grace period; `ListenOptions.Protocols` defaults to HTTP/1.x and HTTP/2. Check them before tuning. Prefer per-endpoint body limits (`[RequestSizeLimit]`) over global changes.
 - Request timeouts: `AddRequestTimeouts()`; `UseRequestTimeouts()` after `UseRouting`; per endpoint `.WithRequestTimeout(...)`; they cancel `RequestAborted`, your code must honour it. Not enforced under a debugger.
 
 ## JSON

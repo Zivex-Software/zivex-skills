@@ -1,6 +1,6 @@
 # Architecture tests
 
-The script finds problems on demand; **architecture tests** make the rules part of `dotnet test` so a violation fails the build for everyone. Libraries such as NetArchTest.Rules and ArchUnitNET exist for this (check the current package names and versions before adding one).
+The script finds problems on demand; **architecture tests** make the rules part of `dotnet test` so a violation fails the build for everyone. Libraries exist for this (names confirmed in their READMEs): **NetArchTest** is the package `NetArchTest.Rules` with fluent `Types.InAssembly(...)` rules; **ArchUnitNET** is `TngTech.ArchUnitNET` plus a test-framework package (`TngTech.ArchUnitNET.xUnit`, `.xUnitV3`, NUnit and MSTestV2 variants). Their APIs differ (ArchUnitNET checks `Classes().That()...` rules against an `Architecture`), so the sketches below apply to NetArchTest only.
 
 ## Where they live
 
@@ -9,7 +9,7 @@ A dedicated project `tests/Architecture.Tests` that references the host and ever
 ## Rule 1 - modules depend on each other only through contracts
 
 ```csharp
-// NetArchTest-style sketch; confirm the API of the version you install
+// NetArchTest sketch: Types.InAssembly(...).ShouldNot().HaveDependencyOn(...).GetResult().IsSuccessful are documented in its README
 public static IEnumerable<object[]> ModulePairs() =>
     from a in Modules.All
     from b in Modules.All
@@ -23,7 +23,7 @@ public void Module_does_not_depend_on_another_modules_internals(ModuleInfo a, Mo
         .ShouldNot().HaveDependencyOn(b.ImplementationNamespace)   // e.g. "Orders" root namespace, excluding "Orders.Contracts"
         .GetResult();
 
-    Assert.True(result.IsSuccessful, string.Join(", ", result.FailingTypeNames ?? []));
+    Assert.True(result.IsSuccessful, $"{a.Name} depends on internals of {b.Name}"); // the README says the result also lists the failing types: check the property name for your version
 }
 ```
 

@@ -25,7 +25,7 @@ if (app.Environment.IsDevelopment()) app.MapOpenApi();   // serves /openapi/v1.j
 ## Versioning
 
 - Decide before the first external consumer. Options: URL segment (`/v1/orders`, easiest to cache/route/document), header (`Api-Version: 1`), media type. Pick one for the whole API.
-- Library: Asp.Versioning (`Asp.Versioning.Http`/`.Mvc`) with `MapGroup("/v{version:apiVersion}")` and `ApiVersionSet`; verify packages/versions in the current docs.
+- Library: Asp.Versioning. Packages (project README): `Asp.Versioning.Http` for minimal APIs, `Asp.Versioning.Mvc` for MVC controllers, plus `Asp.Versioning.Mvc.ApiExplorer`, `Asp.Versioning.OpenApi` and `Asp.Versioning.Http.Client`. The old wiki is no longer maintained; the setup guides (route groups, version sets, reporting versions) are on https://dotnet.github.io/aspnet-api-versioning/, which this skill did not read: follow it for the exact API instead of copying names from memory.
 - Rules: additive changes (new optional fields/endpoints) are non-breaking; removing/renaming fields, changing types/semantics/status codes, making optional required are **breaking** -> new version.
 - Deprecation: `Deprecation`/`Sunset` headers + documentation + usage metrics before removal; support N and N-1.
 - Internal module contracts (`.Contracts`) are versioned by **compatibility** (see `dotnet-module-contract`), not by URL.

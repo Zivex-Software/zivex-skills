@@ -25,7 +25,7 @@ Sources: learn.microsoft.com/ef/core/saving/{concurrency,transactions,execute-in
 
 ## Retries and transactions (connection resiliency)
 
-- `UseSqlServer(cs, o => o.EnableRetryOnFailure())` retries each query and each `SaveChanges` as a unit and **buffers results** (more memory). Defaults for retries/delay are not documented numerically: set them explicitly if it matters.
+- `UseSqlServer(cs, o => o.EnableRetryOnFailure())` retries each query and each `SaveChanges` as a unit and **buffers results** (more memory). The SQL Server defaults are 6 retries and a 30-second maximum delay (`EnableRetryOnFailure` API reference); set them explicitly if it matters.
 - With a retrying strategy a user-initiated transaction throws ("does not support user-initiated transactions"). Wrap the whole unit:
 
 ```csharp

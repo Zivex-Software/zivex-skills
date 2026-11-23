@@ -52,7 +52,7 @@ An **opt-in** house style: strict languages, a compiler and tests that catch mis
 - EF Core JSON columns are change-tracked by reference: replace lists and records, never mutate them in place.
 - Local ports collide between stacks: choose unique ports per project and write them in `AGENTS.md`.
 - Container-backed test suites are heavy: run one or two at a time on a shared machine.
-- Newer .NET test projects use the Microsoft.Testing.Platform runner: use `dotnet test --project <path>` there (check your SDK's docs).
+- With the Microsoft.Testing.Platform runner (opt in through `global.json`, requires the .NET 10 SDK) the syntax is `dotnet test --project <path>`; with the default VSTest runner it stays `dotnet test <path>`. xUnit v3 projects use VSTest through `dotnet test` unless you switch the runner.
 
 ## References
 

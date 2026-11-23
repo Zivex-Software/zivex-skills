@@ -33,7 +33,7 @@ Facts from the docs:
 - Hosted services start in registration order and stop in reverse (`HostOptions.ServicesStartConcurrently/ServicesStopConcurrently` change that). `StartAsync` must be short.
 - **No scope** is created for a hosted service: scoped services (DbContext, repositories) need an explicit scope (`IServiceScopeFactory.CreateAsyncScope()`; the docs example uses `CreateScope()` on the provider).
 - Shutdown: `StopAsync` token has a default **30 s** timeout (`HostOptions.ShutdownTimeout`); `ExecuteAsync` must return promptly after the token fires. Long work must checkpoint and be resumable.
-- Unhandled exceptions in `ExecuteAsync`: the host's `BackgroundServiceExceptionBehavior` decides (the page read did not describe it: check your version: default is to stop the host); decide deliberately and never rely on silent loop death.
+- Unhandled exceptions in `ExecuteAsync`: `HostOptions.BackgroundServiceExceptionBehavior` decides, and its **default is `StopHost`** (an unhandled exception stops the host); decide deliberately, catch per iteration, and never rely on silent loop death.
 - Don't use string interpolation in log calls (the docs sample does: don't copy that).
 
 ## Queues

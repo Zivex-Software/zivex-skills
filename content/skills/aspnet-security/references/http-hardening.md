@@ -43,7 +43,7 @@ The `audit.mjs` script of the `aspnet-security-audit` skill checks these pairs.
 ```csharp
 builder.Services.AddRateLimiter(o =>
 {
-    o.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+    o.RejectionStatusCode = StatusCodes.Status429TooManyRequests;   // the default is 503, so set 429 explicitly
     o.AddPolicy("per-user", ctx => RateLimitPartition.GetTokenBucketLimiter(
         ctx.User.Identity?.Name ?? ctx.Connection.RemoteIpAddress?.ToString() ?? "anon",
         _ => new TokenBucketRateLimiterOptions { TokenLimit = 20, TokensPerPeriod = 10,

@@ -23,7 +23,7 @@ Sources: learn.microsoft.com/aspnet/core/security/preventing-open-redirects, /cr
 
 ## File uploads
 
-- Enforce size limits (`RequestSizeLimit`, `RequestFormLimits`; `FormOptions.MultipartBodyLengthLimit` defaults to 128 MB, Kestrel `MaxRequestBodySize` ~28.6 MB per docs summary: confirm for your version) and stream large files instead of buffering.
+- Enforce size limits (`RequestSizeLimit`, `RequestFormLimits`; `FormOptions.MultipartBodyLengthLimit` defaults to 128 MB, Kestrel `MaxRequestBodySize` to 30,000,000 bytes, about 28.6 MB) and stream large files instead of buffering.
 - Allow-list extensions **and** verify content (signature/magic bytes); scan for malware if files are shared with other users.
 - Generate the stored name (`Path.GetRandomFileName()`); never use the client file name in a path (path traversal). Keep the original name only as encoded metadata.
 - Store outside the application directory (or in blob storage), with execute permission disabled; serve with `Content-Disposition: attachment` and the correct `Content-Type` plus `X-Content-Type-Options: nosniff`.

@@ -17,7 +17,7 @@ Use with `scripts/audit.mjs`. Each section: what to look for -> how to find it -
 
 ## 3. Authentication and sessions
 
-- JWT: issuer, audience, lifetime and signing key validated; no `Validate* = false`; HTTPS metadata; short expiry; refresh token rotation if used.
+- JWT: issuer, audience and lifetime validated (defaults are true), `ValidateIssuerSigningKey = true` (its default is **false**), `RequireSignedTokens` left on, no `Validate* = false`; HTTPS metadata; short expiry; refresh token rotation if used.
 - Cookies: `HttpOnly`, `Secure`, `SameSite`; Data Protection ring shared and persisted; logout invalidates server-side state where applicable.
 - Identity: lockout on, confirmed account, strong password policy or passkeys, password reset tokens single-use and short-lived, no user enumeration via messages/timing on login and reset.
 - Rate limiting on login/token/reset/OTP endpoints.

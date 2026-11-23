@@ -5,7 +5,7 @@
 1. `dotnet build --no-restore` -> 0 warnings, 0 errors.
 2. Regenerate the web client when any endpoint, request, response or contract changed (`npm run generate-api`, or your `sync` script).
 3. `npm run typecheck` in the web project.
-4. Targeted tests only: `dotnet test --project tests/<Project> --filter-class "*X"` (adapt to your runner).
+4. Targeted tests only: `dotnet test --project tests/<Project> --filter-class "*X"` (Microsoft.Testing.Platform syntax; with the default VSTest runner use `dotnet test <path> --filter "FullyQualifiedName~X"`).
 
 Never say "done" without 1 to 3 green; otherwise say "written, not yet run".
 

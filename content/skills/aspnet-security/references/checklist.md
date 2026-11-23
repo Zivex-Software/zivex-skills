@@ -38,7 +38,7 @@ Tick each line or write why it does not apply.
 
 **A07 Identification and authentication failures**
 
-- [ ] Lockout/throttling on credential checks; confirmed accounts; token validation fully on (issuer, audience, lifetime, signing key).
+- [ ] Lockout/throttling on credential checks; confirmed accounts; token validation fully on (issuer, audience, lifetime validated; `ValidateIssuerSigningKey` set to true because it defaults to false).
 - [ ] Cookie flags `HttpOnly`, `Secure`, sensible `SameSite`; sessions invalidated on logout/password change.
 
 **A08 Software and data integrity failures**

@@ -24,7 +24,7 @@ Plus:
 
 - `.editorconfig` with `csharp_style_namespace_declarations = file_scoped:warning` and the rest of your style rules.
 - CI: `dotnet restore --locked-mode`, `dotnet build`, `dotnet format --verify-no-changes`, tests, `dotnet list package --vulnerable --include-transitive`.
-- `global.json` pins the SDK; pin the test runner there if you use the Microsoft.Testing.Platform runner.
+- `global.json` pins the SDK; to use the Microsoft.Testing.Platform runner with `dotnet test` (.NET 10 SDK), add `"test": { "runner": "Microsoft.Testing.Platform" }`; the docs require Microsoft.Testing.Platform 1.7 or later.
 - `.slnx` solution files for new repositories.
 - `InternalsVisibleTo` only for the module's own test projects.
 - Architecture tests (NetArchTest or similar) for module boundaries, internals and forbidden source patterns; optional Roslyn analyzers for house rules.

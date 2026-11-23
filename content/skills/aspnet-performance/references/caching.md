@@ -34,7 +34,7 @@ await cache.RemoveByTagAsync($"product:{id}");   // logical invalidation (entrie
 - Prefer the **stateless** overload (state captured via the factory args) to avoid closure allocations.
 - Invalidation affects this server and the L2 store; **other servers' L1 copies are not invalidated**: keep `LocalCacheExpiration` short where freshness matters.
 - Tags: no empty tags, `"*"` is reserved, no globs. Key max length 1024: don't build keys from raw user input.
-- Serialization: `string`/`byte[]` built in, everything else System.Text.Json; add serializers with `AddSerializer<T, TSerializer>()` (name differs in the overview page: verify). Mark cached DTOs `sealed` + `[ImmutableObject(true)]` to allow instance reuse. Native AOT: source-generated serializer context.
+- Serialization: `string`/`byte[]` built in, everything else System.Text.Json; add serializers with `AddSerializer<T, TSerializer>()` and `AddSerializerFactory`, chained from `AddHybridCache` (confirmed in the guide and the `IHybridCacheBuilder` API reference). Mark cached DTOs `sealed` + `[ImmutableObject(true)]` to allow instance reuse. Native AOT: source-generated serializer context.
 
 ## Output caching
 

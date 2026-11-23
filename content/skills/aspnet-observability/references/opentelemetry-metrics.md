@@ -1,6 +1,6 @@
 # OpenTelemetry, metrics, traces
 
-Sources: learn.microsoft.com/dotnet/core/diagnostics/observability-with-otel, /aspnet/core/log-mon/metrics/metrics (checked). The OpenTelemetry setup code (`AddOpenTelemetry`, `WithTracing`, `UseOtlpExporter`) is **not shown on the Learn page read**; it comes from the OpenTelemetry .NET project: confirm API names against the package version you install.
+Sources: learn.microsoft.com/dotnet/core/diagnostics/observability-with-otel, /aspnet/core/log-mon/metrics/metrics, and the OpenTelemetry .NET docs (opentelemetry.io/docs/languages/dotnet: getting started, exporters, instrumentation). Documented there and used below: `AddOpenTelemetry`, `ConfigureResource`, `WithTracing`, `WithMetrics`, `AddAspNetCoreInstrumentation`, `AddHttpClientInstrumentation`, `AddSource`, `AddMeter`, `AddOtlpExporter` and `Logging.AddOpenTelemetry`. The single-call `UseOtlpExporter()` and the runtime-metrics instrumentation were not shown on the pages read, so they are not used here: check the package docs if you want them.
 
 ## Setup (typical)
 
@@ -10,10 +10,10 @@ Sources: learn.microsoft.com/dotnet/core/diagnostics/observability-with-otel, /a
 //           (+ OpenTelemetry.Instrumentation.SqlClient / EF instrumentation as the repo needs)
 builder.Services.AddOpenTelemetry()
     .ConfigureResource(r => r.AddService("orders-api"))
-    .WithTracing(t => t.AddAspNetCoreInstrumentation().AddHttpClientInstrumentation().AddSource("Acme.Orders"))
-    .WithMetrics(m => m.AddAspNetCoreInstrumentation().AddHttpClientInstrumentation().AddRuntimeInstrumentation().AddMeter("Acme.Orders"))
-    .UseOtlpExporter();            // endpoint from OTEL_EXPORTER_OTLP_ENDPOINT
-builder.Logging.AddOpenTelemetry(o => { o.IncludeScopes = true; o.IncludeFormattedMessage = true; });
+    .WithTracing(t => t.AddAspNetCoreInstrumentation().AddHttpClientInstrumentation().AddSource("Acme.Orders").AddOtlpExporter())
+    .WithMetrics(m => m.AddAspNetCoreInstrumentation().AddHttpClientInstrumentation().AddMeter("Acme.Orders").AddOtlpExporter());
+                                   // endpoint from OTEL_EXPORTER_OTLP_ENDPOINT
+builder.Logging.AddOpenTelemetry(o => { o.IncludeScopes = true; o.AddOtlpExporter(); });
 ```
 
 - The Aspire **ServiceDefaults** template wraps this as `builder.ConfigureOpenTelemetry()` and also adds `/health` and `/alive` endpoints and HTTP resilience: reuse it when the repo is Aspire-based.

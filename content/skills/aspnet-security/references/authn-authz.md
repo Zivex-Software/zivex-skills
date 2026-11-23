@@ -28,12 +28,12 @@ builder.Services.AddAuthentication().AddJwtBearer(o =>
 {
     o.Authority = config["Auth:Authority"];       // discovery + signing keys
     o.Audience = config["Auth:Audience"];
-    // TokenValidationParameters validate issuer, audience, lifetime and signing key by default.
-    o.TokenValidationParameters.ClockSkew = TimeSpan.FromMinutes(1);
+    o.TokenValidationParameters.ValidateIssuerSigningKey = true;   // defaults to FALSE: turn it on explicitly
+    o.TokenValidationParameters.ClockSkew = TimeSpan.FromMinutes(1); // default skew is 5 minutes (DefaultClockSkew)
 });
 ```
 
-- Never set `ValidateIssuer/ValidateAudience/ValidateLifetime/ValidateIssuerSigningKey = false`. (Defaults and exact option names: not re-verified in this pass; confirm in the JwtBearer docs when changing.)
+- Defaults (Microsoft.IdentityModel API reference): `ValidateIssuer`, `ValidateAudience` and `ValidateLifetime` are **true**; `ValidateIssuerSigningKey` is **false** (it validates the key itself, for example a certificate's validity: set it to `true`); `RequireSignedTokens` is true; `JwtBearerOptions.RequireHttpsMetadata` is true. Never set `ValidateIssuer`, `ValidateAudience` or `ValidateLifetime` to false, and never leave signing-key validation off when keys come from configuration.
 - Keep `RequireHttpsMetadata` true outside local development. Short token lifetimes; validate `scope`/`role` claims in policies, not just "has a token".
 - Do not use the Resource Owner Password Credentials grant. Prefer an identity provider (OIDC) over rolling your own token issuing.
 - `dotnet user-jwts` is for **development** tokens only.
@@ -50,7 +50,7 @@ builder.Services.AddAuthentication().AddJwtBearer(o =>
 - Require confirmed accounts in production (`RequireConfirmedAccount = true`).
 - Lockout needs `PasswordSignInAsync(..., lockoutOnFailure: true)`.
 - Set password and lockout options explicitly; the documented sample values (length 6, 5 attempts) are examples, not recommendations: use at least 12 characters or passkeys.
-- .NET 10 adds WebAuthn/FIDO2 **passkeys** to Identity (release notes; details not verified here): prefer them for new sign-in flows when the repo uses Identity.
+- .NET 10 Identity has built-in **passkey** support (WebAuthn/FIDO2): passkey registration, passwordless account creation and passwordless sign-in, configured through `IdentityPasskeyOptions` (`ServerDomain` defaults to the server origin, `AuthenticatorTimeout` 5 minutes, `ChallengeSize` 32 bytes). Documented limits: scoped to authentication (not a general WebAuthn library), no default attestation validation, no built-in 2FA support, and only the Blazor Web App template includes passkey support out of the box. Prefer passkeys for new sign-in flows when the repo uses Identity.
 - Never roll your own password hashing; never log or email passwords.
 
 ## Pitfalls to flag
